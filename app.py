@@ -48,12 +48,21 @@ HISTORY_FILE = os.path.join(BASE_DIR, "history.csv")
 
 
 def load_portfolio() -> pd.DataFrame:
-    df = pd.read_csv(PORTFOLIO_FILE)
+    # 雲端：從 Streamlit Secrets 讀取
+    if "portfolio" in st.secrets:
+        rows = []
+        for item in st.secrets["portfolio"]:
+            rows.append({"ticker": item["ticker"], "shares": item["shares"], "cost": item["cost"]})
+        df = pd.DataFrame(rows)
+    else:
+        df = pd.read_csv(PORTFOLIO_FILE)
     df["ticker"] = df["ticker"].str.upper().str.strip()
     return df
 
 
 def load_watchlist() -> list[str]:
+    if "watchlist" in st.secrets:
+        return [t.strip().upper() for t in st.secrets["watchlist"]["tickers"]]
     with open(WATCHLIST_FILE) as f:
         return [line.strip().upper() for line in f if line.strip()]
 
@@ -68,6 +77,8 @@ def save_portfolio(df: pd.DataFrame):
 
 
 def load_cash() -> float:
+    if "cash" in st.secrets:
+        return float(st.secrets["cash"]["amount"])
     with open(CASH_FILE) as f:
         return float(f.read().strip())
 
