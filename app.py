@@ -78,23 +78,27 @@ def save_cash(val: float):
 
 
 def load_history() -> pd.DataFrame:
-    df = pd.read_csv(HISTORY_FILE, parse_dates=["date"])
-    return df
+    if not os.path.exists(HISTORY_FILE):
+        return pd.DataFrame(columns=["date", "portfolio", "cash", "total"])
+    return pd.read_csv(HISTORY_FILE, parse_dates=["date"])
 
 
 def append_history(portfolio_val: float, cash_val: float):
-    today = date.today().isoformat()
-    df = load_history()
-    if today in df["date"].astype(str).values:
-        return  # 今天已記錄過
-    new_row = pd.DataFrame([{
-        "date": today,
-        "portfolio": round(portfolio_val, 2),
-        "cash": round(cash_val, 2),
-        "total": round(portfolio_val + cash_val, 2),
-    }])
-    df = pd.concat([df, new_row], ignore_index=True)
-    df.to_csv(HISTORY_FILE, index=False)
+    try:
+        today = date.today().isoformat()
+        df = load_history()
+        if today in df["date"].astype(str).values:
+            return
+        new_row = pd.DataFrame([{
+            "date": today,
+            "portfolio": round(portfolio_val, 2),
+            "cash": round(cash_val, 2),
+            "total": round(portfolio_val + cash_val, 2),
+        }])
+        df = pd.concat([df, new_row], ignore_index=True)
+        df.to_csv(HISTORY_FILE, index=False)
+    except Exception:
+        pass
 
 
 @st.cache_data(ttl=300)
