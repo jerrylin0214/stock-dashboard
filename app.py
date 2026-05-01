@@ -50,10 +50,12 @@ HISTORY_FILE = os.path.join(BASE_DIR, "history.csv")
 def load_portfolio() -> pd.DataFrame:
     # 雲端：從 Streamlit Secrets 讀取
     if "portfolio" in st.secrets:
-        rows = []
-        for item in st.secrets["portfolio"]:
-            rows.append({"ticker": item.ticker, "shares": item.shares, "cost": item.cost})
-        df = pd.DataFrame(rows)
+        p = st.secrets["portfolio"]
+        df = pd.DataFrame({
+            "ticker": list(p["tickers"]),
+            "shares": list(p["shares"]),
+            "cost":   list(p["costs"]),
+        })
     else:
         df = pd.read_csv(PORTFOLIO_FILE)
     df["ticker"] = df["ticker"].str.upper().str.strip()
