@@ -1,0 +1,6 @@
+portfolio.csv
+cash.txt
+history.csv
+__pycache__/
+*.pyc
+.DS_Store
