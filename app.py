@@ -52,7 +52,7 @@ def load_portfolio() -> pd.DataFrame:
     if "portfolio" in st.secrets:
         rows = []
         for item in st.secrets["portfolio"]:
-            rows.append({"ticker": item["ticker"], "shares": item["shares"], "cost": item["cost"]})
+            rows.append({"ticker": item.ticker, "shares": item.shares, "cost": item.cost})
         df = pd.DataFrame(rows)
     else:
         df = pd.read_csv(PORTFOLIO_FILE)
