@@ -146,6 +146,7 @@ def fetch_prices(tickers: tuple) -> dict:
 
 
 # ── 載入資料 ─────────────────────────────────────────
+IS_CLOUD = "portfolio" in st.secrets  # 雲端版不顯示編輯功能
 portfolio = load_portfolio()
 watchlist = load_watchlist()
 cash = load_cash()
@@ -253,46 +254,48 @@ with tab1:
 
     st.markdown(cards_html, unsafe_allow_html=True)
 
-    # 編輯持倉（折疊）
-    with st.expander("✏️ 編輯持倉"):
-        edited = st.data_editor(
-            portfolio,
-            column_config={
-                "ticker": st.column_config.TextColumn("代號"),
-                "shares": st.column_config.NumberColumn("持股數", min_value=0, step=1),
-                "cost": st.column_config.NumberColumn("成本/股 ($)", min_value=0, format="%.2f"),
-            },
-            num_rows="dynamic",
-            use_container_width=True,
-            key="portfolio_editor",
-        )
-        if st.button("💾 儲存變更", use_container_width=True):
-            edited["ticker"] = edited["ticker"].str.upper().str.strip()
-            save_portfolio(edited)
-            st.cache_data.clear()
-            st.session_state.pop("portfolio_editor", None)
-            st.rerun()
+    # 編輯持倉（本機才顯示）
+    if not IS_CLOUD:
+        with st.expander("✏️ 編輯持倉"):
+            edited = st.data_editor(
+                portfolio,
+                column_config={
+                    "ticker": st.column_config.TextColumn("代號"),
+                    "shares": st.column_config.NumberColumn("持股數", min_value=0, step=1),
+                    "cost": st.column_config.NumberColumn("成本/股 ($)", min_value=0, format="%.2f"),
+                },
+                num_rows="dynamic",
+                use_container_width=True,
+                key="portfolio_editor",
+            )
+            if st.button("💾 儲存變更", use_container_width=True):
+                edited["ticker"] = edited["ticker"].str.upper().str.strip()
+                save_portfolio(edited)
+                st.cache_data.clear()
+                st.session_state.pop("portfolio_editor", None)
+                st.rerun()
 
 # ════════════════════════════════════════════════════
 # Tab 2 — 追蹤清單
 # ════════════════════════════════════════════════════
 with tab2:
-    # 編輯追蹤清單
-    with st.expander("✏️ 編輯追蹤清單"):
-        wl_df = pd.DataFrame({"ticker": watchlist})
-        edited_wl = st.data_editor(
-            wl_df,
-            column_config={"ticker": st.column_config.TextColumn("股票代號")},
-            num_rows="dynamic",
-            use_container_width=True,
-            key="watchlist_editor",
-        )
-        if st.button("💾 儲存清單", use_container_width=True):
-            new_wl = edited_wl["ticker"].dropna().tolist()
-            save_watchlist(new_wl)
-            st.cache_data.clear()
-            st.session_state.pop("watchlist_editor", None)
-            st.rerun()
+    # 編輯追蹤清單（本機才顯示）
+    if not IS_CLOUD:
+        with st.expander("✏️ 編輯追蹤清單"):
+            wl_df = pd.DataFrame({"ticker": watchlist})
+            edited_wl = st.data_editor(
+                wl_df,
+                column_config={"ticker": st.column_config.TextColumn("股票代號")},
+                num_rows="dynamic",
+                use_container_width=True,
+                key="watchlist_editor",
+            )
+            if st.button("💾 儲存清單", use_container_width=True):
+                new_wl = edited_wl["ticker"].dropna().tolist()
+                save_watchlist(new_wl)
+                st.cache_data.clear()
+                st.session_state.pop("watchlist_editor", None)
+                st.rerun()
 
     wl_items = ""
     for ticker in watchlist:
@@ -348,13 +351,14 @@ with tab3:
     </div>
     """, unsafe_allow_html=True)
 
-    # 更新現金
-    with st.expander("✏️ 更新現金水位"):
-        new_cash = st.number_input("現金（USD）", value=cash, min_value=0.0, step=100.0, format="%.2f")
-        if st.button("💾 儲存現金", use_container_width=True):
-            save_cash(new_cash)
-            st.success("已儲存！")
-            st.rerun()
+    # 更新現金（本機才顯示）
+    if not IS_CLOUD:
+        with st.expander("✏️ 更新現金水位"):
+            new_cash = st.number_input("現金（USD）", value=cash, min_value=0.0, step=100.0, format="%.2f")
+            if st.button("💾 儲存現金", use_container_width=True):
+                save_cash(new_cash)
+                st.success("已儲存！")
+                st.rerun()
 
     # 歷史折線圖
     st.markdown("**總資產變化**")
