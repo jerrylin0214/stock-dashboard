@@ -52,9 +52,9 @@ def load_portfolio() -> pd.DataFrame:
     if "portfolio" in st.secrets:
         p = st.secrets["portfolio"]
         df = pd.DataFrame({
-            "ticker": list(p["tickers"]),
-            "shares": list(p["shares"]),
-            "cost":   list(p["costs"]),
+            "ticker": p["tickers"].split(","),
+            "shares": [float(x) for x in p["shares"].split(",")],
+            "cost":   [float(x) for x in p["costs"].split(",")],
         })
     else:
         df = pd.read_csv(PORTFOLIO_FILE)
@@ -64,7 +64,7 @@ def load_portfolio() -> pd.DataFrame:
 
 def load_watchlist() -> list[str]:
     if "watchlist" in st.secrets:
-        return [t.strip().upper() for t in st.secrets["watchlist"]["tickers"]]
+        return [t.strip().upper() for t in st.secrets["watchlist"]["tickers"].split(",")]
     with open(WATCHLIST_FILE) as f:
         return [line.strip().upper() for line in f if line.strip()]
 
