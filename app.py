@@ -377,12 +377,30 @@ with tab3:
         main_labels.append("其他")
         main_values.append(other_val)
 
+    # 股票用藍色系漸層，現金用金色
+    stock_palette = [
+        "#1565c0","#1976d2","#1e88e5","#2196f3","#42a5f5",
+        "#64b5f6","#90caf9","#0d47a1","#0277bd","#01579b",
+        "#006064","#00838f","#26c6da","#4dd0e1","#80deea","#b2ebf2",
+    ]
+    colors = []
+    stock_idx = 0
+    for label in main_labels:
+        if label == "現金":
+            colors.append("#f9a825")  # 金色
+        elif label == "其他":
+            colors.append("#b0bec5")  # 灰色
+        else:
+            colors.append(stock_palette[stock_idx % len(stock_palette)])
+            stock_idx += 1
+
     fig = go.Figure(go.Pie(
         labels=main_labels,
         values=main_values,
         hole=0.45,
         textinfo="label+percent",
         textfont_size=12,
+        marker=dict(colors=colors, line=dict(color="#ffffff", width=2)),
         hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
     ))
     fig.update_layout(
