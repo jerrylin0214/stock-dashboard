@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import plotly.graph_objects as go
 from datetime import datetime, date
 import os
 
@@ -350,6 +351,46 @@ with tab3:
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # 圓餅圖：各股市值 + 現金
+    pie_labels = []
+    pie_values = []
+    for _, row in portfolio.iterrows():
+        t = row["ticker"]
+        if t in prices:
+            val = prices[t]["price"] * float(row["shares"])
+            pie_labels.append(t)
+            pie_values.append(val)
+    pie_labels.append("現金")
+    pie_values.append(cash)
+
+    # 小於 2% 的合併為「其他」
+    total = sum(pie_values)
+    main_labels, main_values, other_val = [], [], 0.0
+    for l, v in zip(pie_labels, pie_values):
+        if v / total >= 0.02:
+            main_labels.append(l)
+            main_values.append(v)
+        else:
+            other_val += v
+    if other_val > 0:
+        main_labels.append("其他")
+        main_values.append(other_val)
+
+    fig = go.Figure(go.Pie(
+        labels=main_labels,
+        values=main_values,
+        hole=0.45,
+        textinfo="label+percent",
+        textfont_size=12,
+        hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
+    ))
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        showlegend=False,
+        height=320,
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
     # 更新現金（本機才顯示）
     if not IS_CLOUD:
