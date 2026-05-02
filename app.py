@@ -352,62 +352,59 @@ with tab3:
     </div>
     """, unsafe_allow_html=True)
 
-    # 圓餅圖：各股市值 + 現金
-    pie_labels = []
-    pie_values = []
+    # Treemap：面積 = 市值，顏色 = 總損益%
+    tm_labels = ["總資產"]
+    tm_parents = [""]
+    tm_values = [0]
+    tm_colors = [0]
+    tm_text = [""]
+
     for _, row in portfolio.iterrows():
         t = row["ticker"]
-        if t in prices:
-            val = prices[t]["price"] * float(row["shares"])
-            pie_labels.append(t)
-            pie_values.append(val)
-    pie_labels.append("現金")
-    pie_values.append(cash)
+        if t not in prices:
+            continue
+        val = prices[t]["price"] * float(row["shares"])
+        cost_total = float(row["cost"]) * float(row["shares"])
+        pnl_pct = (val - cost_total) / cost_total * 100 if cost_total > 0 else 0
+        tm_labels.append(t)
+        tm_parents.append("總資產")
+        tm_values.append(val)
+        tm_colors.append(pnl_pct)
+        tm_text.append(f"${val:,.0f}<br>{'+' if pnl_pct>=0 else ''}{pnl_pct:.1f}%")
 
-    # 小於 2% 的合併為「其他」
-    total = sum(pie_values)
-    main_labels, main_values, other_val = [], [], 0.0
-    for l, v in zip(pie_labels, pie_values):
-        if v / total >= 0.02:
-            main_labels.append(l)
-            main_values.append(v)
-        else:
-            other_val += v
-    if other_val > 0:
-        main_labels.append("其他")
-        main_values.append(other_val)
+    tm_labels.append("現金")
+    tm_parents.append("總資產")
+    tm_values.append(cash)
+    tm_colors.append(0)
+    tm_text.append(f"${cash:,.0f}")
 
-    # 股票用藍色系漸層，現金用金色
-    stock_palette = [
-        "#1565c0","#1976d2","#1e88e5","#2196f3","#42a5f5",
-        "#64b5f6","#90caf9","#0d47a1","#0277bd","#01579b",
-        "#006064","#00838f","#26c6da","#4dd0e1","#80deea","#b2ebf2",
-    ]
-    colors = []
-    stock_idx = 0
-    for label in main_labels:
-        if label == "現金":
-            colors.append("#f9a825")  # 金色
-        elif label == "其他":
-            colors.append("#b0bec5")  # 灰色
-        else:
-            colors.append(stock_palette[stock_idx % len(stock_palette)])
-            stock_idx += 1
-
-    fig = go.Figure(go.Pie(
-        labels=main_labels,
-        values=main_values,
-        hole=0.45,
-        textinfo="label+percent",
-        textfont_size=12,
-        marker=dict(colors=colors, line=dict(color="#ffffff", width=2)),
-        hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
+    fig = go.Figure(go.Treemap(
+        labels=tm_labels,
+        parents=tm_parents,
+        values=tm_values,
+        customdata=tm_text,
+        texttemplate="<b>%{label}</b><br>%{customdata}",
+        hovertemplate="%{label}<br>市值 $%{value:,.0f}<extra></extra>",
+        marker=dict(
+            colors=tm_colors,
+            colorscale=[[0, "#c0392b"], [0.5, "#ecf0f1"], [1, "#27ae60"]],
+            cmid=0,
+            cmin=-30,
+            cmax=30,
+            line=dict(width=2, color="#ffffff"),
+        ),
+        textfont=dict(size=13),
+        pathbar=dict(visible=False),
     ))
     fig.update_layout(
-        margin=dict(t=10, b=10, l=10, r=10),
-        showlegend=False,
-        height=320,
+        margin=dict(t=0, b=0, l=0, r=0),
+        height=360,
     )
+    # 現金格固定灰色
+    fig.data[0].marker.colors = [
+        "#78909c" if l == "現金" else c
+        for l, c in zip(tm_labels, tm_colors)
+    ]
     st.plotly_chart(fig, use_container_width=True)
 
     # 更新現金（本機才顯示）
