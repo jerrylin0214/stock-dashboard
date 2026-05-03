@@ -417,13 +417,39 @@ with tab3:
                 st.rerun()
 
     # 歷史折線圖
-    st.markdown("**總資產變化**")
     hist = load_history()
     if len(hist) >= 2:
         hist = hist.sort_values("date")
-        st.line_chart(hist.set_index("date")[["total", "portfolio", "cash"]])
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(
+            x=hist["date"], y=hist["total"],
+            name="總資產", mode="lines",
+            line=dict(color="#1565c0", width=2.5),
+            fill="tozeroy", fillcolor="rgba(21,101,192,0.08)",
+        ))
+        fig2.add_trace(go.Scatter(
+            x=hist["date"], y=hist["portfolio"],
+            name="股票", mode="lines",
+            line=dict(color="#27ae60", width=1.8, dash="dot"),
+        ))
+        fig2.add_trace(go.Scatter(
+            x=hist["date"], y=hist["cash"],
+            name="現金", mode="lines",
+            line=dict(color="#f9a825", width=1.8, dash="dot"),
+        ))
+        fig2.update_layout(
+            margin=dict(t=10, b=10, l=0, r=0),
+            height=240,
+            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center", font=dict(size=11)),
+            xaxis=dict(showgrid=False, tickfont=dict(size=11)),
+            yaxis=dict(gridcolor="#f0f0f0", tickfont=dict(size=11),
+                       tickprefix="$", tickformat=",.0f"),
+            plot_bgcolor="white",
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig2, use_container_width=True)
     elif len(hist) == 1:
-        st.caption("資料只有一天，明天會開始顯示折線圖。")
+        st.caption("資料只有一天，明天起會顯示走勢圖。")
     else:
         st.caption("尚無歷史資料。")
 
