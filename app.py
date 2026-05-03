@@ -363,14 +363,16 @@ with tab3:
         t = row["ticker"]
         if t not in prices:
             continue
-        val = prices[t]["price"] * float(row["shares"])
-        cost_total = float(row["cost"]) * float(row["shares"])
-        pnl_pct = (val - cost_total) / cost_total * 100 if cost_total > 0 else 0
+        p = prices[t]
+        val = p["price"] * float(row["shares"])
+        daily_pnl = p["change"] * float(row["shares"])
+        pct = p["pct"]
+        sign = "+" if pct >= 0 else ""
         tm_labels.append(t)
         tm_parents.append("總資產")
         tm_values.append(val)
-        tm_colors.append(pnl_pct)
-        tm_text.append(f"${val:,.0f}<br>{'+' if pnl_pct>=0 else ''}{pnl_pct:.1f}%")
+        tm_colors.append(pct)
+        tm_text.append(f"${val:,.0f}<br>{sign}{pct:.2f}%")
 
     tm_labels.append("現金")
     tm_parents.append("總資產")
