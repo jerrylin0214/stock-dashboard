@@ -4,6 +4,9 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, date
 import os
+import base64
+import requests
+import io
 
 st.set_page_config(
     page_title="美股績效追蹤",
@@ -91,15 +94,33 @@ def save_cash(val: float):
         f.write(str(val))
 
 
+def _gh_headers():
+    if "github" not in st.secrets:
+        return None, None
+    token = st.secrets["github"]["token"]
+    repo  = st.secrets["github"]["repo"]
+    return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}, repo
+
+
 def load_history() -> pd.DataFrame:
-    if not os.path.exists(HISTORY_FILE):
-        return pd.DataFrame(columns=["date", "portfolio", "cash", "total"])
-    return pd.read_csv(HISTORY_FILE, parse_dates=["date"])
+    empty = pd.DataFrame(columns=["date", "portfolio", "cash", "total"])
+    headers, repo = _gh_headers()
+    if headers is None:
+        if os.path.exists(HISTORY_FILE):
+            return pd.read_csv(HISTORY_FILE, parse_dates=["date"])
+        return empty
+    url = f"https://api.github.com/repos/{repo}/contents/history.csv"
+    r = requests.get(url, headers=headers)
+    if r.status_code != 200:
+        return empty
+    content = base64.b64decode(r.json()["content"]).decode()
+    return pd.read_csv(io.StringIO(content), parse_dates=["date"])
 
 
 def append_history(portfolio_val: float, cash_val: float):
     try:
         today = date.today().isoformat()
+        headers, repo = _gh_headers()
         df = load_history()
         if today in df["date"].astype(str).values:
             return
@@ -110,7 +131,24 @@ def append_history(portfolio_val: float, cash_val: float):
             "total": round(portfolio_val + cash_val, 2),
         }])
         df = pd.concat([df, new_row], ignore_index=True)
-        df.to_csv(HISTORY_FILE, index=False)
+        csv_str = df.to_csv(index=False)
+
+        if headers is None:
+            df.to_csv(HISTORY_FILE, index=False)
+            return
+
+        # 取得目前檔案的 SHA（更新用）
+        url = f"https://api.github.com/repos/{repo}/contents/history.csv"
+        r = requests.get(url, headers=headers)
+        sha = r.json().get("sha") if r.status_code == 200 else None
+
+        payload = {
+            "message": f"history: {today}",
+            "content": base64.b64encode(csv_str.encode()).decode(),
+        }
+        if sha:
+            payload["sha"] = sha
+        requests.put(url, json=payload, headers=headers)
     except Exception:
         pass
 
