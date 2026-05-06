@@ -481,7 +481,12 @@ with tab3:
             margin=dict(t=10, b=10, l=0, r=0),
             height=240,
             legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center", font=dict(size=11)),
-            xaxis=dict(showgrid=False, tickfont=dict(size=11), tickformat="%m/%d", dtick="D1"),
+            xaxis=dict(
+                showgrid=False,
+                tickfont=dict(size=11),
+                tickformat="%m/%d",
+                rangebreaks=[dict(bounds=["sat", "mon"])],
+            ),
             yaxis=dict(gridcolor="#f0f0f0", tickfont=dict(size=11),
                        tickprefix="$", tickformat=",.0f"),
             plot_bgcolor="white",
