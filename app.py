@@ -212,7 +212,7 @@ portfolio_value = sum(
 append_history(portfolio_value, cash)
 
 # ── Tab ──────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["💼 我的持倉", "👀 追蹤清單", "📊 總資產"])
+tab1, tab2, tab3, tab4 = st.tabs(["💼 我的持倉", "👀 追蹤清單", "📊 總資產", "💰 配置"])
 
 # ════════════════════════════════════════════════════
 # Tab 1 — 持倉
@@ -506,3 +506,80 @@ with tab3:
             st.dataframe(hist_display, use_container_width=True, hide_index=True)
         else:
             st.caption("尚無資料")
+
+# ════════════════════════════════════════════════════
+# Tab 4 — 配置
+# ════════════════════════════════════════════════════
+with tab4:
+    total_assets4 = portfolio_value + cash
+
+    # ── 配置比例甜甜圈圖 ────────────────────────────
+    _palette = [
+        "#2196F3","#FF9800","#E91E63","#9C27B0","#00BCD4",
+        "#FF5722","#3F51B5","#4CAF50","#795548","#009688",
+        "#F44336","#CDDC39","#FFC107","#8BC34A","#03A9F4",
+        "#673AB7","#607D8B",
+    ]
+    _port = portfolio.copy()
+    _port["_val"] = _port.apply(
+        lambda r: prices[r["ticker"]]["price"] * float(r["shares"]) if r["ticker"] in prices else 0,
+        axis=1,
+    )
+    _port = _port[_port["_val"] > 0].sort_values("_val", ascending=False)
+
+    pie_labels = list(_port["ticker"]) + ["現金"]
+    pie_values = list(_port["_val"]) + [cash]
+    pie_colors = [_palette[i % len(_palette)] for i in range(len(_port))] + ["#78909c"]
+
+    fig_pie = go.Figure(go.Pie(
+        labels=pie_labels,
+        values=pie_values,
+        hole=0.48,
+        marker=dict(colors=pie_colors, line=dict(color="#ffffff", width=2)),
+        textinfo="label+percent",
+        textfont=dict(size=11),
+        hovertemplate="%{label}<br>$%{value:,.0f} (%{percent})<extra></extra>",
+        sort=False,
+    ))
+    fig_pie.update_layout(
+        margin=dict(t=10, b=0, l=0, r=0),
+        height=340,
+        showlegend=False,
+        annotations=[dict(
+            text=f"<b>${total_assets4:,.0f}</b><br><span style='font-size:10px'>總資產</span>",
+            x=0.5, y=0.5,
+            font=dict(size=13, color="#333"),
+            showarrow=False,
+        )],
+    )
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+    # ── 股東權益 ────────────────────────────────────
+    dad_val = total_assets4 * 0.40
+    mom_val = total_assets4 * 0.40
+    bro_val = total_assets4 * 0.20
+
+    sh_html = (
+        '<div style="font-size:15px;font-weight:700;margin:8px 0 10px">👥 股東權益</div>'
+        '<div style="display:flex;gap:10px;">'
+        '<div style="flex:1;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:14px;padding:14px 8px;text-align:center;">'
+        '<div style="font-size:34px">👨</div>'
+        '<div style="font-size:14px;font-weight:700;margin-top:4px">爸爸</div>'
+        '<div style="font-size:12px;color:#666">40%</div>'
+        f'<div style="font-size:15px;font-weight:700;color:#1565c0;margin-top:6px">${dad_val:,.0f}</div>'
+        '</div>'
+        '<div style="flex:1;background:linear-gradient(135deg,#fce4ec,#f8bbd0);border-radius:14px;padding:14px 8px;text-align:center;">'
+        '<div style="font-size:34px">👩</div>'
+        '<div style="font-size:14px;font-weight:700;margin-top:4px">媽媽</div>'
+        '<div style="font-size:12px;color:#666">40%</div>'
+        f'<div style="font-size:15px;font-weight:700;color:#c62828;margin-top:6px">${mom_val:,.0f}</div>'
+        '</div>'
+        '<div style="flex:1;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:14px;padding:14px 8px;text-align:center;">'
+        '<div style="font-size:34px">👦</div>'
+        '<div style="font-size:14px;font-weight:700;margin-top:4px">哥哥</div>'
+        '<div style="font-size:12px;color:#666">20%</div>'
+        f'<div style="font-size:15px;font-weight:700;color:#2e7d32;margin-top:6px">${bro_val:,.0f}</div>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(sh_html, unsafe_allow_html=True)
