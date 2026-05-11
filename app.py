@@ -558,6 +558,15 @@ with tab4:
     dad_val = total_assets4 * 0.40
     mom_val = total_assets4 * 0.40
     bro_val = total_assets4 * 0.20
+    dad_cost, mom_cost, bro_cost = 10000, 10000, 5000
+
+    def _pnl_color(val, cost):
+        return "#27ae60" if val >= cost else "#e74c3c"
+
+    def _pnl_str(val, cost):
+        diff = val - cost
+        sign = "+" if diff >= 0 else ""
+        return f'{sign}${abs(diff):,.0f}'
 
     sh_html = (
         '<div style="font-size:15px;font-weight:700;margin:8px 0 10px">👥 股東權益</div>'
@@ -567,18 +576,24 @@ with tab4:
         '<div style="font-size:14px;font-weight:700;margin-top:4px">爸爸</div>'
         '<div style="font-size:12px;color:#666">40%</div>'
         f'<div style="font-size:15px;font-weight:700;color:#1565c0;margin-top:6px">${dad_val:,.0f}</div>'
+        f'<div style="font-size:11px;color:{_pnl_color(dad_val,dad_cost)};margin-top:3px">{_pnl_str(dad_val,dad_cost)}</div>'
+        f'<div style="font-size:10px;color:#999;margin-top:1px">成本 ${dad_cost:,}</div>'
         '</div>'
         '<div style="flex:1;background:linear-gradient(135deg,#fce4ec,#f8bbd0);border-radius:14px;padding:14px 8px;text-align:center;">'
         '<div style="font-size:34px">👩</div>'
         '<div style="font-size:14px;font-weight:700;margin-top:4px">媽媽</div>'
         '<div style="font-size:12px;color:#666">40%</div>'
         f'<div style="font-size:15px;font-weight:700;color:#c62828;margin-top:6px">${mom_val:,.0f}</div>'
+        f'<div style="font-size:11px;color:{_pnl_color(mom_val,mom_cost)};margin-top:3px">{_pnl_str(mom_val,mom_cost)}</div>'
+        f'<div style="font-size:10px;color:#999;margin-top:1px">成本 ${mom_cost:,}</div>'
         '</div>'
         '<div style="flex:1;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:14px;padding:14px 8px;text-align:center;">'
         '<div style="font-size:34px">👦</div>'
         '<div style="font-size:14px;font-weight:700;margin-top:4px">哥哥</div>'
         '<div style="font-size:12px;color:#666">20%</div>'
         f'<div style="font-size:15px;font-weight:700;color:#2e7d32;margin-top:6px">${bro_val:,.0f}</div>'
+        f'<div style="font-size:11px;color:{_pnl_color(bro_val,bro_cost)};margin-top:3px">{_pnl_str(bro_val,bro_cost)}</div>'
+        f'<div style="font-size:10px;color:#999;margin-top:1px">成本 ${bro_cost:,}</div>'
         '</div>'
         '</div>'
     )
