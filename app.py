@@ -194,6 +194,36 @@ def calc_irr(terminal_value: float, transactions=None) -> float | None:
 
 
 @st.cache_data(ttl=3600)
+def estimate_stock_value_at(date_str: str, tickers_shares: tuple) -> float:
+    """用歷史收盤價估計某日的股票市值（假設持股數與現在相同）。"""
+    tickers = [t for t, _ in tickers_shares]
+    if not tickers:
+        return 0.0
+    try:
+        start = (pd.Timestamp(date_str) - pd.DateOffset(days=10)).strftime("%Y-%m-%d")
+        end   = (pd.Timestamp(date_str) + pd.DateOffset(days=3)).strftime("%Y-%m-%d")
+        raw   = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
+        closes = raw["Close"]
+        if isinstance(closes, pd.Series):
+            closes = closes.to_frame(name=tickers[0])
+        if isinstance(closes.columns, pd.MultiIndex):
+            closes.columns = closes.columns.get_level_values(0)
+        if closes.index.tz is not None:
+            closes.index = closes.index.tz_localize(None)
+        valid = closes[closes.index <= pd.Timestamp(date_str)]
+        if valid.empty:
+            return 0.0
+        row = valid.iloc[-1]
+        return round(sum(
+            float(row[t]) * float(s)
+            for t, s in tickers_shares
+            if t in row.index and not pd.isna(row[t])
+        ), 2)
+    except Exception:
+        return 0.0
+
+
+@st.cache_data(ttl=3600)
 def fetch_bench_data() -> pd.DataFrame:
     try:
         raw = yf.download(["SPY", "QQQ", "SOXX"], period="3y", auto_adjust=True, progress=False)
@@ -641,11 +671,17 @@ with tab5:
     )
 
     # ── IRR（2025/6/5 後子期間）───────────────────────
-    txns_recent = [(d, amt) for d, amt in TRANSACTIONS if d >= "2025-06-05"]
+    # 先抓 2025/6/5 當天股票市值作為起始餘額
+    tickers_shares = tuple(zip(portfolio["ticker"].tolist(), portfolio["shares"].tolist()))
+    stock_val_at_start = estimate_stock_value_at("2025-06-05", tickers_shares)
+    # 將起始餘額視為額外「入金」，合併進子期間現金流
+    txns_recent = [("2025-06-05", stock_val_at_start)] + [
+        (d, amt) for d, amt in TRANSACTIONS if d >= "2025-06-05"
+    ]
     irr2 = calc_irr(total_assets5, transactions=txns_recent)
     dep2 = sum(amt for _, amt in txns_recent if amt > 0)
     wth2 = sum(-amt for _, amt in txns_recent if amt < 0)
-    moic2 = (total_assets5 + wth2) / dep2 if dep2 > 0 else 0
+    moic2 = total_assets5 / (dep2 - wth2) if (dep2 - wth2) > 0 else 0
 
     if irr2 is not None:
         irr2_pct = irr2 * 100
@@ -660,11 +696,13 @@ with tab5:
         f'border-radius:14px;padding:14px 18px;margin-bottom:12px;">'
         f'<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">年化報酬（2025/6/5 起）</div>'
         f'<div style="font-size:28px;font-weight:700;color:{irr2_color};margin-top:4px">{irr2_str}</div>'
-        f'<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:#64748b;">'
-        f'<div>投入 <b style="color:#e2e8f0">${dep2:,.0f}</b></div>'
+        f'<div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#64748b;flex-wrap:wrap;">'
+        f'<div>起始餘額 <b style="color:#e2e8f0">${stock_val_at_start:,.0f}</b></div>'
+        f'<div>後續入金 <b style="color:#e2e8f0">${sum(amt for d,amt in TRANSACTIONS if d>="2025-06-05" and amt>0):,.0f}</b></div>'
         f'<div>現值 <b style="color:#00e5ff">${total_assets5:,.0f}</b></div>'
         f'<div>MOIC <b style="color:#e2e8f0">{moic2:.2f}x</b></div>'
         f'</div>'
+        f'<div style="font-size:10px;color:#374151;margin-top:6px">起始餘額以當日持股×收盤價估算（未含現金）</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
