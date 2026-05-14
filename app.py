@@ -671,11 +671,9 @@ with tab5:
     )
 
     # ── IRR（2025/6/5 後子期間）───────────────────────
-    # 先抓 2025/6/5 當天股票市值作為起始餘額
-    tickers_shares = tuple(zip(portfolio["ticker"].tolist(), portfolio["shares"].tolist()))
-    stock_val_at_start = estimate_stock_value_at("2025-06-05", tickers_shares)
-    # 將起始餘額視為額外「入金」，合併進子期間現金流
-    txns_recent = [("2025-06-05", stock_val_at_start)] + [
+    # 2025/5 底實際帳戶餘額（用戶提供）
+    SUB_START_VALUE = 8857.84
+    txns_recent = [("2025-06-05", SUB_START_VALUE)] + [
         (d, amt) for d, amt in TRANSACTIONS if d >= "2025-06-05"
     ]
     irr2 = calc_irr(total_assets5, transactions=txns_recent)
@@ -697,12 +695,12 @@ with tab5:
         f'<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">年化報酬（2025/6/5 起）</div>'
         f'<div style="font-size:28px;font-weight:700;color:{irr2_color};margin-top:4px">{irr2_str}</div>'
         f'<div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#64748b;flex-wrap:wrap;">'
-        f'<div>起始餘額 <b style="color:#e2e8f0">${stock_val_at_start:,.0f}</b></div>'
+        f'<div>起始餘額 <b style="color:#e2e8f0">${SUB_START_VALUE:,.0f}</b></div>'
         f'<div>後續入金 <b style="color:#e2e8f0">${sum(amt for d,amt in TRANSACTIONS if d>="2025-06-05" and amt>0):,.0f}</b></div>'
         f'<div>現值 <b style="color:#00e5ff">${total_assets5:,.0f}</b></div>'
         f'<div>MOIC <b style="color:#e2e8f0">{moic2:.2f}x</b></div>'
         f'</div>'
-        f'<div style="font-size:10px;color:#374151;margin-top:6px">起始餘額以當日持股×收盤價估算（未含現金）</div>'
+        f'<div style="font-size:10px;color:#374151;margin-top:6px">起始餘額為 2025/5 底實際帳戶總值</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
