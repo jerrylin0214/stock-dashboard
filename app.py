@@ -14,33 +14,32 @@ st.set_page_config(
     layout="centered",
 )
 
-# 手機友善 CSS
 st.markdown("""
 <style>
-    .block-container { padding: 3rem 1rem 3rem; }
+    .block-container { padding: 2.5rem 1rem 3rem; }
     header[data-testid="stHeader"] { display: none; }
-    [data-testid="metric-container"] {
-        background: #f7f7f9;
-        border-radius: 10px;
-        padding: 8px 12px;
+    h1 { font-size: 22px !important; margin-bottom: 0 !important; letter-spacing: 0.5px; }
+
+    /* Tab 樣式 */
+    [data-testid="stTabs"] button {
+        font-size: 13px !important;
+        padding: 6px 10px !important;
     }
-    [data-testid="metric-container"] label { font-size: 13px !important; }
-    [data-testid="metric-container"] [data-testid="stMetricValue"] { font-size: 18px !important; }
-    [data-testid="metric-container"] [data-testid="stMetricDelta"] { font-size: 12px !important; }
-    @media (prefers-color-scheme: dark) {
-        [data-testid="metric-container"] { background: #1e1e2e; }
-    }
-    .pnl-pos { color: #00c853; font-weight: bold; }
-    .pnl-neg { color: #ff1744; font-weight: bold; }
-    h1 { font-size: 24px !important; margin-bottom: 0 !important; }
+
+    /* Summary box：科技感漸層 + 發光邊框 */
     .summary-box {
-        background: linear-gradient(135deg, #1a237e, #283593);
-        color: white;
+        background: linear-gradient(135deg, #0d1f3c, #0a2a4a);
+        border: 1px solid rgba(0,229,255,0.25);
+        box-shadow: 0 0 18px rgba(0,229,255,0.08);
+        color: #e2e8f0;
         border-radius: 14px;
         padding: 14px 18px;
         margin-bottom: 12px;
         font-size: 13px;
     }
+
+    /* Divider line */
+    .row-divider { border-bottom: 1px solid rgba(255,255,255,0.07); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -268,22 +267,22 @@ with tab1:
         sign = "+" if change >= 0 else ""
         d_sign = "+" if daily_pnl >= 0 else ""
         t_sign = "+" if total_pnl >= 0 else ""
-        chg_hex = "#27ae60" if change >= 0 else "#e74c3c"
-        day_hex = "#27ae60" if daily_pnl >= 0 else "#e74c3c"
-        tot_hex = "#27ae60" if total_pnl >= 0 else "#e74c3c"
+        chg_hex = "#00e676" if change >= 0 else "#ff5252"
+        day_hex = "#00e676" if daily_pnl >= 0 else "#ff5252"
+        tot_hex = "#00e676" if total_pnl >= 0 else "#ff5252"
 
         cards_html += (
-            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 2px;border-bottom:1px solid #e8e8e8;gap:4px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 4px;border-bottom:1px solid rgba(255,255,255,0.07);gap:4px;">'
             f'<div style="flex:1">'
-            f'<div style="font-size:15px;font-weight:700">{ticker}</div>'
-            f'<div style="font-size:22px;font-weight:700">${price:.2f}</div>'
+            f'<div style="font-size:15px;font-weight:700;color:#e2e8f0;letter-spacing:0.3px">{ticker}</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#f8fafc">${price:.2f}</div>'
             f'<div style="font-size:13px;color:{chg_hex};font-weight:600">{sign}{change:.2f} ({sign}{pct:.2f}%)</div>'
             f'</div>'
-            f'<div style="flex:1;text-align:center;font-size:13px;color:#555;line-height:2">'
+            f'<div style="flex:1;text-align:center;font-size:13px;color:#94a3b8;line-height:2">'
             f'<div>持股 {shares:g} 股</div>'
             f'<div style="color:{day_hex};font-weight:600">Today {d_sign}${abs(daily_pnl):,.0f}</div>'
             f'</div>'
-            f'<div style="flex:1;text-align:right;font-size:13px;color:#555;line-height:2">'
+            f'<div style="flex:1;text-align:right;font-size:13px;color:#94a3b8;line-height:2">'
             f'<div>每股成本 ${cost:.2f}</div>'
             f'<div style="color:{tot_hex};font-weight:600">總損益 {t_sign}${abs(total_pnl):,.0f}</div>'
             f'<div style="font-size:12px;color:{tot_hex}">{t_sign}{total_pnl_pct:.1f}%</div>'
@@ -339,25 +338,30 @@ with tab2:
     wl_items = ""
     for ticker in watchlist:
         if ticker not in prices:
-            wl_items += f'<div style="background:#f7f7f9;border-radius:10px;padding:10px 12px;"><div style="font-size:13px;font-weight:700">{ticker}</div><div style="font-size:11px;color:#aaa">—</div></div>'
+            wl_items += (
+                f'<div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;">'
+                f'<div style="font-size:13px;font-weight:700;color:#e2e8f0">{ticker}</div>'
+                f'<div style="font-size:11px;color:#4b5563">—</div></div>'
+            )
             continue
         p = prices[ticker]
         price = p["price"]
         change = p["change"]
         pct = p["pct"]
         sign = "+" if pct >= 0 else ""
-        # 背景深淺：abs(pct) 0%=淡, 5%+=最深，上限 alpha=0.35
-        intensity = min(abs(pct) / 5.0, 1.0) * 0.35
+        intensity = min(abs(pct) / 5.0, 1.0) * 0.22
         if pct >= 0:
-            bg = f"rgba(39,174,96,{intensity:.2f})"
-            chg_hex = "#1a7a43"
+            bg = f"rgba(0,230,118,{intensity:.2f})"
+            border = "rgba(0,230,118,0.3)"
+            chg_hex = "#00e676"
         else:
-            bg = f"rgba(231,76,60,{intensity:.2f})"
-            chg_hex = "#a93226"
+            bg = f"rgba(255,82,82,{intensity:.2f})"
+            border = "rgba(255,82,82,0.3)"
+            chg_hex = "#ff5252"
         wl_items += (
-            f'<div style="background:{bg};border-radius:10px;padding:10px 12px;">'
-            f'<div style="font-size:13px;font-weight:700">{ticker}</div>'
-            f'<div style="font-size:18px;font-weight:700">${price:.2f}</div>'
+            f'<div style="background:{bg};border:1px solid {border};border-radius:10px;padding:10px 12px;">'
+            f'<div style="font-size:13px;font-weight:700;color:#e2e8f0">{ticker}</div>'
+            f'<div style="font-size:18px;font-weight:700;color:#f8fafc">${price:.2f}</div>'
             f'<div style="font-size:12px;font-weight:600;color:{chg_hex}">{sign}{pct:.2f}%&nbsp;&nbsp;{sign}${abs(change):.2f}</div>'
             f'</div>'
         )
@@ -375,17 +379,17 @@ with tab3:
 
     st.markdown(f"""
     <div class="summary-box">
-        <div style="font-size:11px;opacity:0.8">總資產</div>
-        <div style="font-size:26px;font-weight:bold">${total_assets:,.0f}</div>
+        <div style="font-size:11px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase">Total Assets</div>
+        <div style="font-size:28px;font-weight:700;color:#00e5ff;margin-top:2px">${total_assets:,.0f}</div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:14px;">
-      <div style="flex:1;background:#f0f4ff;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:11px;color:#555">股票市值</div>
-        <div style="font-size:17px;font-weight:700">${portfolio_value:,.0f}</div>
+      <div style="flex:1;background:#0d1f3c;border:1px solid rgba(0,229,255,0.15);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:11px;color:#64748b;letter-spacing:0.5px">股票市值</div>
+        <div style="font-size:17px;font-weight:700;color:#e2e8f0">${portfolio_value:,.0f}</div>
       </div>
-      <div style="flex:1;background:#f0fff4;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:11px;color:#555">現金水位</div>
-        <div style="font-size:17px;font-weight:700">${cash:,.2f}</div>
+      <div style="flex:1;background:#0d1f3c;border:1px solid rgba(248,196,113,0.2);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:11px;color:#64748b;letter-spacing:0.5px">現金水位</div>
+        <div style="font-size:17px;font-weight:700;color:#f8c471">${cash:,.2f}</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -427,22 +431,22 @@ with tab3:
         hovertemplate="%{label}<br>市值 $%{value:,.0f}<extra></extra>",
         marker=dict(
             colors=tm_colors,
-            colorscale=[[0, "#c0392b"], [0.5, "#f5f5f5"], [1, "#27ae60"]],
+            colorscale=[[0, "#7f1d1d"], [0.5, "#1e293b"], [1, "#14532d"]],
             cmid=0,
             cmin=-3,
             cmax=3,
-            line=dict(width=2, color="#ffffff"),
+            line=dict(width=2, color="#0a0e1a"),
         ),
-        textfont=dict(size=13),
+        textfont=dict(size=13, color="#e2e8f0"),
         pathbar=dict(visible=False),
     ))
     fig.update_layout(
         margin=dict(t=0, b=0, l=0, r=0),
         height=360,
+        paper_bgcolor="#0a0e1a",
     )
-    # 現金格固定灰色
     fig.data[0].marker.colors = [
-        "#78909c" if l == "現金" else c
+        "#2d3748" if l == "現金" else c
         for l, c in zip(tm_labels, tm_colors)
     ]
     st.plotly_chart(fig, use_container_width=True)
@@ -464,32 +468,35 @@ with tab3:
         fig2.add_trace(go.Scatter(
             x=hist["date"], y=hist["total"],
             name="總資產", mode="lines",
-            line=dict(color="#1565c0", width=2.5),
-            fill="tozeroy", fillcolor="rgba(21,101,192,0.08)",
+            line=dict(color="#00e5ff", width=2.5),
+            fill="tozeroy", fillcolor="rgba(0,229,255,0.06)",
         ))
         fig2.add_trace(go.Scatter(
             x=hist["date"], y=hist["portfolio"],
             name="股票", mode="lines",
-            line=dict(color="#27ae60", width=1.8, dash="dot"),
+            line=dict(color="#00e676", width=1.8, dash="dot"),
         ))
         fig2.add_trace(go.Scatter(
             x=hist["date"], y=hist["cash"],
             name="現金", mode="lines",
-            line=dict(color="#f9a825", width=1.8, dash="dot"),
+            line=dict(color="#f8c471", width=1.8, dash="dot"),
         ))
         fig2.update_layout(
             margin=dict(t=10, b=10, l=0, r=0),
             height=240,
-            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center", font=dict(size=11)),
+            paper_bgcolor="#0a0e1a",
+            plot_bgcolor="#0a0e1a",
+            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center",
+                        font=dict(size=11, color="#94a3b8"), bgcolor="rgba(0,0,0,0)"),
             xaxis=dict(
                 showgrid=False,
-                tickfont=dict(size=11),
+                tickfont=dict(size=11, color="#64748b"),
                 tickformat="%m/%d",
                 rangebreaks=[dict(bounds=["sat", "mon"])],
+                linecolor="rgba(255,255,255,0.1)",
             ),
-            yaxis=dict(gridcolor="#f0f0f0", tickfont=dict(size=11),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(size=11, color="#64748b"),
                        tickprefix="$", tickformat=",.0f"),
-            plot_bgcolor="white",
             hovermode="x unified",
         )
         st.plotly_chart(fig2, use_container_width=True)
@@ -535,20 +542,21 @@ with tab4:
         labels=pie_labels,
         values=pie_values,
         hole=0.48,
-        marker=dict(colors=pie_colors, line=dict(color="#ffffff", width=2)),
+        marker=dict(colors=pie_colors, line=dict(color="#0a0e1a", width=2)),
         textinfo="label+percent",
-        textfont=dict(size=11),
+        textfont=dict(size=11, color="#e2e8f0"),
         hovertemplate="%{label}<br>$%{value:,.0f} (%{percent})<extra></extra>",
         sort=False,
     ))
     fig_pie.update_layout(
         margin=dict(t=10, b=0, l=0, r=0),
         height=340,
+        paper_bgcolor="#0a0e1a",
         showlegend=False,
         annotations=[dict(
-            text=f"<b>${total_assets4:,.0f}</b><br><span style='font-size:10px'>總資產</span>",
+            text=f"<b>${total_assets4:,.0f}</b><br>總資產",
             x=0.5, y=0.5,
-            font=dict(size=13, color="#333"),
+            font=dict(size=13, color="#e2e8f0"),
             showarrow=False,
         )],
     )
@@ -569,31 +577,31 @@ with tab4:
         return f'{sign}${abs(diff):,.0f}'
 
     sh_html = (
-        '<div style="font-size:15px;font-weight:700;margin:8px 0 10px">👥 股東權益</div>'
+        '<div style="font-size:14px;font-weight:600;margin:10px 0 10px;color:#94a3b8;letter-spacing:0.5px">👥 股東權益</div>'
         '<div style="display:flex;gap:10px;">'
-        '<div style="flex:1;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:14px;padding:14px 8px;text-align:center;">'
-        '<div style="font-size:34px">👨</div>'
-        '<div style="font-size:14px;font-weight:700;margin-top:4px">爸爸</div>'
-        '<div style="font-size:12px;color:#666">40%</div>'
-        f'<div style="font-size:15px;font-weight:700;color:#1565c0;margin-top:6px">${dad_val:,.0f}</div>'
+        '<div style="flex:1;background:linear-gradient(160deg,#0d1f3c,#0a2a4a);border:1px solid rgba(0,229,255,0.2);border-radius:14px;padding:14px 8px;text-align:center;">'
+        '<div style="font-size:32px">👨</div>'
+        '<div style="font-size:14px;font-weight:700;margin-top:4px;color:#e2e8f0">爸爸</div>'
+        '<div style="font-size:12px;color:#64748b">40%</div>'
+        f'<div style="font-size:15px;font-weight:700;color:#00e5ff;margin-top:6px">${dad_val:,.0f}</div>'
         f'<div style="font-size:11px;color:{_pnl_color(dad_val,dad_cost)};margin-top:3px">{_pnl_str(dad_val,dad_cost)}</div>'
-        f'<div style="font-size:10px;color:#999;margin-top:1px">成本 ${dad_cost:,}</div>'
+        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${dad_cost:,}</div>'
         '</div>'
-        '<div style="flex:1;background:linear-gradient(135deg,#fce4ec,#f8bbd0);border-radius:14px;padding:14px 8px;text-align:center;">'
-        '<div style="font-size:34px">👩</div>'
-        '<div style="font-size:14px;font-weight:700;margin-top:4px">媽媽</div>'
-        '<div style="font-size:12px;color:#666">40%</div>'
-        f'<div style="font-size:15px;font-weight:700;color:#c62828;margin-top:6px">${mom_val:,.0f}</div>'
+        '<div style="flex:1;background:linear-gradient(160deg,#1f0d2a,#2a0a3a);border:1px solid rgba(200,100,255,0.2);border-radius:14px;padding:14px 8px;text-align:center;">'
+        '<div style="font-size:32px">👩</div>'
+        '<div style="font-size:14px;font-weight:700;margin-top:4px;color:#e2e8f0">媽媽</div>'
+        '<div style="font-size:12px;color:#64748b">40%</div>'
+        f'<div style="font-size:15px;font-weight:700;color:#c084fc;margin-top:6px">${mom_val:,.0f}</div>'
         f'<div style="font-size:11px;color:{_pnl_color(mom_val,mom_cost)};margin-top:3px">{_pnl_str(mom_val,mom_cost)}</div>'
-        f'<div style="font-size:10px;color:#999;margin-top:1px">成本 ${mom_cost:,}</div>'
+        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${mom_cost:,}</div>'
         '</div>'
-        '<div style="flex:1;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:14px;padding:14px 8px;text-align:center;">'
-        '<div style="font-size:34px">👦</div>'
-        '<div style="font-size:14px;font-weight:700;margin-top:4px">哥哥</div>'
-        '<div style="font-size:12px;color:#666">20%</div>'
-        f'<div style="font-size:15px;font-weight:700;color:#2e7d32;margin-top:6px">${bro_val:,.0f}</div>'
+        '<div style="flex:1;background:linear-gradient(160deg,#0d2a1a,#0a3a1f);border:1px solid rgba(0,230,118,0.2);border-radius:14px;padding:14px 8px;text-align:center;">'
+        '<div style="font-size:32px">👦</div>'
+        '<div style="font-size:14px;font-weight:700;margin-top:4px;color:#e2e8f0">哥哥</div>'
+        '<div style="font-size:12px;color:#64748b">20%</div>'
+        f'<div style="font-size:15px;font-weight:700;color:#00e676;margin-top:6px">${bro_val:,.0f}</div>'
         f'<div style="font-size:11px;color:{_pnl_color(bro_val,bro_cost)};margin-top:3px">{_pnl_str(bro_val,bro_cost)}</div>'
-        f'<div style="font-size:10px;color:#999;margin-top:1px">成本 ${bro_cost:,}</div>'
+        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${bro_cost:,}</div>'
         '</div>'
         '</div>'
     )
