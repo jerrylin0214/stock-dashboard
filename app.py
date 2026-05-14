@@ -156,7 +156,12 @@ def append_history(portfolio_val: float, cash_val: float):
 def fetch_bench_data() -> pd.DataFrame:
     try:
         raw = yf.download(["SPY", "QQQ", "SOXX"], period="3y", auto_adjust=True, progress=False)
-        return raw["Close"].dropna(how="all")
+        df = raw["Close"].dropna(how="all")
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -584,7 +589,7 @@ with tab5:
 
     # ── 指數比較表 ──────────────────────────────────
     bench_df = fetch_bench_data()
-    today_ts = pd.Timestamp.today()
+    today_ts = pd.Timestamp.today().normalize()
     BENCH = [("SPY", "S&P 500"), ("QQQ", "Nasdaq 100"), ("SOXX", "費城半導體")]
 
     def _fmt_pct(v):
@@ -630,7 +635,7 @@ with tab5:
         hist5 = load_history()
         if len(hist5) >= 2:
             hist5 = hist5.sort_values("date")
-            start_ts = pd.Timestamp(hist5["date"].min())
+            start_ts = pd.Timestamp(hist5["date"].min()).normalize()
             bench_trim = bench_df[bench_df.index >= start_ts]
 
             if not bench_trim.empty:
