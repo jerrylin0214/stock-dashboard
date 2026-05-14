@@ -152,6 +152,15 @@ def append_history(portfolio_val: float, cash_val: float):
         pass
 
 
+@st.cache_data(ttl=3600)
+def fetch_bench_data() -> pd.DataFrame:
+    try:
+        raw = yf.download(["SPY", "QQQ", "SOXX"], period="3y", auto_adjust=True, progress=False)
+        return raw["Close"].dropna(how="all")
+    except Exception:
+        return pd.DataFrame()
+
+
 @st.cache_data(ttl=300)
 def fetch_prices(tickers: tuple) -> dict:
     if not tickers:
@@ -211,7 +220,7 @@ portfolio_value = sum(
 append_history(portfolio_value, cash)
 
 # ── Tab ──────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["💼 我的持倉", "👀 追蹤清單", "📊 總資產", "💰 配置"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["💼 我的持倉", "👀 追蹤清單", "📊 總資產", "💰 配置", "📈 績效"])
 
 # ════════════════════════════════════════════════════
 # Tab 1 — 持倉
@@ -550,6 +559,141 @@ with tab4:
             f'</div>'
         )
     st.markdown(detail_html, unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════
+# Tab 5 — 績效
+# ════════════════════════════════════════════════════
+with tab5:
+    # ── 未實現損益（簡單報酬）───────────────────────
+    total_cost = sum(float(r["shares"]) * float(r["cost"]) for _, r in portfolio.iterrows())
+    simple_pnl = portfolio_value - total_cost
+    simple_pct = simple_pnl / total_cost * 100 if total_cost > 0 else 0
+    s_sign = "+" if simple_pnl >= 0 else ""
+    s_color = "#00e676" if simple_pnl >= 0 else "#ff5252"
+
+    st.markdown(
+        f'<div class="summary-box">'
+        f'<div style="font-size:11px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase">持倉未實現損益</div>'
+        f'<div style="font-size:28px;font-weight:700;color:{s_color};margin-top:2px">{s_sign}{simple_pct:.1f}%</div>'
+        f'<div style="font-size:13px;color:#94a3b8;margin-top:2px">{s_sign}${abs(simple_pnl):,.0f}&ensp;·&ensp;成本 ${total_cost:,.0f}</div>'
+        f'<div style="font-size:10px;color:#4b5563;margin-top:8px;line-height:1.5">'
+        f'未計入出入金時點，年化報酬率請提供交易明細。</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── 指數比較表 ──────────────────────────────────
+    bench_df = fetch_bench_data()
+    today_ts = pd.Timestamp.today()
+    BENCH = [("SPY", "S&P 500"), ("QQQ", "Nasdaq 100"), ("SOXX", "費城半導體")]
+
+    def _fmt_pct(v):
+        if v is None:
+            return '<div style="text-align:right;color:#4b5563">—</div>'
+        c = "#00e676" if v >= 0 else "#ff5252"
+        sign = "+" if v >= 0 else ""
+        return f'<div style="text-align:right;color:{c};font-weight:600">{sign}{v:.1f}%</div>'
+
+    if not bench_df.empty:
+        tbl = (
+            '<div style="font-size:12px;font-weight:600;color:#64748b;margin:14px 0 8px;letter-spacing:0.5px">美股指數比較</div>'
+            '<div style="background:#111827;border-radius:10px;overflow:hidden;">'
+            '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;padding:8px 12px;'
+            'font-size:11px;color:#4b5563;border-bottom:1px solid rgba(255,255,255,0.06)">'
+            '<div>指數</div><div style="text-align:right">YTD</div>'
+            '<div style="text-align:right">近1年</div><div style="text-align:right">近3年(年化)</div>'
+            '</div>'
+        )
+        for sym, name in BENCH:
+            if sym not in bench_df.columns:
+                continue
+            s = bench_df[sym].dropna()
+            curr = float(s.iloc[-1])
+            ytd_s = s[s.index.year == today_ts.year]
+            r_ytd = (curr / float(ytd_s.iloc[0]) - 1) * 100 if not ytd_s.empty else None
+            i1y = s.index.searchsorted(today_ts - pd.DateOffset(years=1))
+            r1y = (curr / float(s.iloc[i1y]) - 1) * 100 if i1y < len(s) else None
+            i3y = s.index.searchsorted(today_ts - pd.DateOffset(years=3))
+            r3y = ((curr / float(s.iloc[i3y])) ** (1/3) - 1) * 100 if i3y < len(s) else None
+            tbl += (
+                f'<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;'
+                f'padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;">'
+                f'<div style="color:#e2e8f0">{name}'
+                f'<br><span style="font-size:10px;color:#4b5563">{sym}</span></div>'
+                f'{_fmt_pct(r_ytd)}{_fmt_pct(r1y)}{_fmt_pct(r3y)}'
+                f'</div>'
+            )
+        tbl += '</div>'
+        st.markdown(tbl, unsafe_allow_html=True)
+
+        # ── 走勢對照圖 ──────────────────────────────
+        hist5 = load_history()
+        if len(hist5) >= 2:
+            hist5 = hist5.sort_values("date")
+            start_ts = pd.Timestamp(hist5["date"].min())
+            bench_trim = bench_df[bench_df.index >= start_ts]
+
+            if not bench_trim.empty:
+                fig_b = go.Figure()
+                first_total = float(hist5["total"].iloc[0])
+                fig_b.add_trace(go.Scatter(
+                    x=hist5["date"], y=hist5["total"] / first_total * 100,
+                    name="我的投資組合", mode="lines+markers",
+                    line=dict(color="#00e5ff", width=2.5),
+                    marker=dict(size=5),
+                ))
+                bench_styles = {
+                    "SPY":  ("#c084fc", "S&P 500"),
+                    "QQQ":  ("#00e676", "Nasdaq 100"),
+                    "SOXX": ("#f8c471", "費城半導體"),
+                }
+                for sym, (color, label) in bench_styles.items():
+                    if sym not in bench_trim.columns:
+                        continue
+                    s = bench_trim[sym].dropna()
+                    if s.empty:
+                        continue
+                    fig_b.add_trace(go.Scatter(
+                        x=s.index, y=s / float(s.iloc[0]) * 100,
+                        name=label, mode="lines",
+                        line=dict(color=color, width=1.5, dash="dot"),
+                    ))
+                fig_b.update_layout(
+                    margin=dict(t=20, b=10, l=0, r=0),
+                    height=250,
+                    paper_bgcolor="#0a0e1a",
+                    plot_bgcolor="#0a0e1a",
+                    legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center",
+                                font=dict(size=11, color="#94a3b8"), bgcolor="rgba(0,0,0,0)"),
+                    xaxis=dict(showgrid=False, tickfont=dict(size=10, color="#64748b"),
+                               tickformat="%m/%d", rangebreaks=[dict(bounds=["sat", "mon"])],
+                               linecolor="rgba(255,255,255,0.08)"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.05)",
+                               tickfont=dict(size=10, color="#64748b"), ticksuffix=""),
+                    hovermode="x unified",
+                    annotations=[dict(
+                        text="基準 = 100（從第一筆歷史記錄起算）",
+                        x=0, y=1.06, xref="paper", yref="paper",
+                        font=dict(size=10, color="#4b5563"), showarrow=False,
+                    )],
+                )
+                st.plotly_chart(fig_b, use_container_width=True)
+        else:
+            st.caption("歷史記錄不足兩筆，無法繪製走勢對照圖。")
+
+    # ── 年化報酬率（IRR）待補 ───────────────────────
+    st.markdown(
+        '<div style="margin-top:16px;padding:12px 14px;background:#111827;'
+        'border:1px solid rgba(0,229,255,0.12);border-radius:10px;">'
+        '<div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">📋 年化報酬率（IRR / MWR）</div>'
+        '<div style="font-size:12px;color:#4b5563;line-height:1.7">'
+        '提供出入金明細後可計算：<br>'
+        '日期 ・ 金額（正數＝入金，負數＝出金）<br>'
+        '<span style="color:#00e5ff">→ 計算 Money-Weighted Return，並與指數年化報酬比較</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── 股東權益 ────────────────────────────────────
     dad_val = total_assets4 * 0.40
