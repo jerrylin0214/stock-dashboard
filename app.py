@@ -460,52 +460,8 @@ with tab3:
                 st.success("已儲存！")
                 st.rerun()
 
-    # 歷史折線圖
-    hist = load_history()
-    if len(hist) >= 2:
-        hist = hist.sort_values("date")
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(
-            x=hist["date"], y=hist["total"],
-            name="總資產", mode="lines",
-            line=dict(color="#00e5ff", width=2.5),
-            fill="tozeroy", fillcolor="rgba(0,229,255,0.06)",
-        ))
-        fig2.add_trace(go.Scatter(
-            x=hist["date"], y=hist["portfolio"],
-            name="股票", mode="lines",
-            line=dict(color="#00e676", width=1.8, dash="dot"),
-        ))
-        fig2.add_trace(go.Scatter(
-            x=hist["date"], y=hist["cash"],
-            name="現金", mode="lines",
-            line=dict(color="#f8c471", width=1.8, dash="dot"),
-        ))
-        fig2.update_layout(
-            margin=dict(t=10, b=10, l=0, r=0),
-            height=240,
-            paper_bgcolor="#0a0e1a",
-            plot_bgcolor="#0a0e1a",
-            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center",
-                        font=dict(size=11, color="#94a3b8"), bgcolor="rgba(0,0,0,0)"),
-            xaxis=dict(
-                showgrid=False,
-                tickfont=dict(size=11, color="#64748b"),
-                tickformat="%m/%d",
-                rangebreaks=[dict(bounds=["sat", "mon"])],
-                linecolor="rgba(255,255,255,0.1)",
-            ),
-            yaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(size=11, color="#64748b"),
-                       tickprefix="$", tickformat=",.0f"),
-            hovermode="x unified",
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-    elif len(hist) == 1:
-        st.caption("資料只有一天，明天起會顯示走勢圖。")
-    else:
-        st.caption("尚無歷史資料。")
-
     # 歷史明細
+    hist = load_history()
     with st.expander("📋 歷史明細"):
         if not hist.empty:
             hist_display = hist.sort_values("date", ascending=False).copy()
@@ -520,37 +476,47 @@ with tab3:
 with tab4:
     total_assets4 = portfolio_value + cash
 
-    # ── 配置比例甜甜圈圖 ────────────────────────────
-    _palette = [
-        "#2196F3","#FF9800","#E91E63","#9C27B0","#00BCD4",
-        "#FF5722","#3F51B5","#4CAF50","#795548","#009688",
-        "#F44336","#CDDC39","#FFC107","#8BC34A","#03A9F4",
-        "#673AB7","#607D8B",
-    ]
+    # ── 計算各股市值 ────────────────────────────────
     _port = portfolio.copy()
     _port["_val"] = _port.apply(
         lambda r: prices[r["ticker"]]["price"] * float(r["shares"]) if r["ticker"] in prices else 0,
         axis=1,
     )
-    _port = _port[_port["_val"] > 0].sort_values("_val", ascending=False)
+    stock_vals = dict(zip(_port["ticker"], _port["_val"]))
 
-    pie_labels = list(_port["ticker"]) + ["現金"]
-    pie_values = list(_port["_val"]) + [cash]
-    pie_colors = [_palette[i % len(_palette)] for i in range(len(_port))] + ["#78909c"]
+    # 分類定義：(成員list, 顏色)
+    CATS = {
+        "AI / 半導體": (["NVDA", "AMD", "INTC", "SMCI", "ALAB"], "#00e5ff"),
+        "科技大型股":  (["AAPL", "AMZN", "META", "TSLA"],         "#c084fc"),
+        "太空 / 新興": (["ASTS", "PLTR", "PATH", "PACB"],          "#00e676"),
+        "ETF":        (["VOO"],                                    "#f8c471"),
+        "其他":       (["CCL", "DJT"],                             "#94a3b8"),
+        "現金":       ([],                                          "#2d3748"),
+    }
 
+    # 各類別總市值
+    cat_vals = {}
+    for cat, (tickers, color) in CATS.items():
+        val = cash if cat == "現金" else sum(stock_vals.get(t, 0) for t in tickers)
+        cat_vals[cat] = (val, color)
+
+    # ── 圓餅圖 ──────────────────────────────────────
     fig_pie = go.Figure(go.Pie(
-        labels=pie_labels,
-        values=pie_values,
-        hole=0.48,
-        marker=dict(colors=pie_colors, line=dict(color="#0a0e1a", width=2)),
+        labels=list(cat_vals.keys()),
+        values=[v for v, _ in cat_vals.values()],
+        hole=0.52,
+        marker=dict(
+            colors=[c for _, c in cat_vals.values()],
+            line=dict(color="#0a0e1a", width=3),
+        ),
         textinfo="label+percent",
-        textfont=dict(size=11, color="#e2e8f0"),
+        textfont=dict(size=12, color="#e2e8f0"),
         hovertemplate="%{label}<br>$%{value:,.0f} (%{percent})<extra></extra>",
         sort=False,
     ))
     fig_pie.update_layout(
         margin=dict(t=10, b=0, l=0, r=0),
-        height=340,
+        height=290,
         paper_bgcolor="#0a0e1a",
         showlegend=False,
         annotations=[dict(
@@ -561,6 +527,29 @@ with tab4:
         )],
     )
     st.plotly_chart(fig_pie, use_container_width=True)
+
+    # ── 分類細項 ────────────────────────────────────
+    detail_html = ""
+    for cat, (tickers, color) in CATS.items():
+        val, _ = cat_vals[cat]
+        pct = val / total_assets4 * 100 if total_assets4 > 0 else 0
+        if cat == "現金":
+            detail = f"${cash:,.0f}"
+        else:
+            parts = [f"{t}&nbsp;${stock_vals.get(t,0):,.0f}" for t in tickers if stock_vals.get(t, 0) > 0]
+            detail = "&ensp;·&ensp;".join(parts) if parts else "—"
+        detail_html += (
+            f'<div style="padding:8px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.06);">'
+            f'<div style="display:flex;align-items:center;gap:10px;">'
+            f'<div style="width:9px;height:9px;border-radius:50%;background:{color};flex-shrink:0;box-shadow:0 0 6px {color}88"></div>'
+            f'<div style="flex:1;font-size:13px;font-weight:600;color:#e2e8f0">{cat}</div>'
+            f'<div style="font-size:12px;color:#64748b;margin-right:8px">{pct:.1f}%</div>'
+            f'<div style="font-size:13px;font-weight:600;color:#e2e8f0">${val:,.0f}</div>'
+            f'</div>'
+            f'<div style="font-size:11px;color:#4b5563;margin-top:3px;padding-left:19px">{detail}</div>'
+            f'</div>'
+        )
+    st.markdown(detail_html, unsafe_allow_html=True)
 
     # ── 股東權益 ────────────────────────────────────
     dad_val = total_assets4 * 0.40
