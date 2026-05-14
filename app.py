@@ -16,30 +16,70 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding: 2.5rem 1rem 3rem; }
+    /* ── 基礎 ── */
+    .block-container { padding: 1.8rem 1rem 3rem; }
     header[data-testid="stHeader"] { display: none; }
-    h1 { font-size: 22px !important; margin-bottom: 0 !important; letter-spacing: 0.5px; }
 
-    /* Tab 樣式 */
+    /* ── 數字字體：等寬，閱讀更精準 ── */
+    .mono {
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace !important;
+        letter-spacing: 0.5px;
+    }
+
+    /* ── Tab ── */
     [data-testid="stTabs"] button {
-        font-size: 13px !important;
-        padding: 6px 10px !important;
+        font-size: 12px !important;
+        padding: 6px 9px !important;
+        letter-spacing: 0.4px;
+        color: #4b5563 !important;
+        text-transform: uppercase;
+    }
+    [data-testid="stTabs"] button[aria-selected="true"] {
+        color: #00e5ff !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stTabs"] button[aria-selected="true"]::after {
+        content: '';
+        display: block;
+        height: 2px;
+        background: linear-gradient(90deg, #00e5ff, #006eff);
+        border-radius: 2px;
+        box-shadow: 0 0 8px rgba(0,229,255,0.6);
+        margin-top: 4px;
     }
 
-    /* Summary box：科技感漸層 + 發光邊框 */
+    /* ── Summary box ── */
     .summary-box {
-        background: linear-gradient(135deg, #0d1f3c, #0a2a4a);
-        border: 1px solid rgba(0,229,255,0.25);
-        box-shadow: 0 0 18px rgba(0,229,255,0.08);
+        background: linear-gradient(135deg, #060d1f, #091428);
+        border: 1px solid rgba(0,229,255,0.18);
+        border-top: 2px solid rgba(0,229,255,0.7);
+        box-shadow: 0 0 24px rgba(0,229,255,0.06), inset 0 0 30px rgba(0,0,0,0.4);
         color: #e2e8f0;
-        border-radius: 14px;
-        padding: 14px 18px;
+        border-radius: 12px;
+        padding: 15px 18px;
         margin-bottom: 12px;
-        font-size: 13px;
     }
 
-    /* Divider line */
-    .row-divider { border-bottom: 1px solid rgba(255,255,255,0.07); }
+    /* ── 活動指示燈動畫 ── */
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; box-shadow: 0 0 4px #00e676, 0 0 8px #00e676; }
+        50%       { opacity: 0.5; box-shadow: 0 0 2px #00e676; }
+    }
+    .live-dot {
+        display: inline-block;
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: #00e676;
+        animation: pulse-dot 2s ease-in-out infinite;
+        vertical-align: middle;
+        margin-right: 7px;
+        margin-bottom: 2px;
+    }
+
+    /* ── 滾動條 ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0a0e1a; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.2); border-radius: 2px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -279,12 +319,21 @@ all_tickers = tuple(set(portfolio["ticker"].tolist() + watchlist))
 prices = fetch_prices(all_tickers)
 
 # ── 標題列 ───────────────────────────────────────────
-col_title, col_refresh = st.columns([4, 1])
+col_title, col_refresh = st.columns([5, 1])
 with col_title:
-    st.title("📈 美股績效追蹤")
-    st.caption(f"更新時間：{datetime.now().strftime('%m/%d %H:%M')}")
+    st.markdown(
+        f'<div style="padding:4px 0 10px;">'
+        f'<div style="font-size:17px;font-weight:800;letter-spacing:2px;'
+        f'text-transform:uppercase;color:#e2e8f0;">'
+        f'<span class="live-dot"></span>美股績效追蹤</div>'
+        f'<div style="font-size:10px;color:#374151;letter-spacing:1px;margin-top:3px;'
+        f'font-family:\'SF Mono\',monospace">'
+        f'PORTFOLIO DASHBOARD &nbsp;·&nbsp; {datetime.now().strftime("%Y/%m/%d %H:%M")}'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
 with col_refresh:
-    if st.button("🔄", help="重新載入", use_container_width=True):
+    if st.button("↺", help="重新載入", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -355,22 +404,35 @@ with tab1:
         chg_hex = "#00e676" if change >= 0 else "#ff5252"
         day_hex = "#00e676" if daily_pnl >= 0 else "#ff5252"
         tot_hex = "#00e676" if total_pnl >= 0 else "#ff5252"
+        bar_color = "#00e676" if daily_pnl >= 0 else "#ff5252"
+        bg_tint = "rgba(0,230,118,0.04)" if daily_pnl >= 0 else "rgba(255,82,82,0.04)"
 
         cards_html += (
-            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 4px;border-bottom:1px solid rgba(255,255,255,0.07);gap:4px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:12px 10px 12px 14px;'
+            f'border-bottom:1px solid rgba(255,255,255,0.06);'
+            f'border-left:2px solid {bar_color};'
+            f'background:linear-gradient(90deg,{bg_tint},transparent);'
+            f'gap:4px;">'
             f'<div style="flex:1">'
-            f'<div style="font-size:15px;font-weight:700;color:#e2e8f0;letter-spacing:0.3px">{ticker}</div>'
-            f'<div style="font-size:22px;font-weight:700;color:#f8fafc">${price:.2f}</div>'
-            f'<div style="font-size:13px;color:{chg_hex};font-weight:600">{sign}{change:.2f} ({sign}{pct:.2f}%)</div>'
+            f'<div style="font-size:13px;font-weight:800;color:#e2e8f0;letter-spacing:1.5px;'
+            f'font-family:\'SF Mono\',monospace">{ticker}</div>'
+            f'<div style="font-size:21px;font-weight:700;color:#f8fafc;'
+            f'font-family:\'SF Mono\',monospace;letter-spacing:-0.5px">${price:.2f}</div>'
+            f'<div style="font-size:12px;color:{chg_hex};font-weight:600;'
+            f'font-family:\'SF Mono\',monospace">{sign}{change:.2f}&nbsp;({sign}{pct:.2f}%)</div>'
             f'</div>'
-            f'<div style="flex:1;text-align:center;font-size:13px;color:#94a3b8;line-height:2">'
-            f'<div>持股 {shares:g} 股</div>'
-            f'<div style="color:{day_hex};font-weight:600">Today {d_sign}${abs(daily_pnl):,.0f}</div>'
+            f'<div style="flex:1;text-align:center;font-size:12px;color:#64748b;line-height:2">'
+            f'<div>{shares:g} 股</div>'
+            f'<div style="color:{day_hex};font-weight:700;font-family:\'SF Mono\',monospace">'
+            f'Today {d_sign}${abs(daily_pnl):,.0f}</div>'
             f'</div>'
-            f'<div style="flex:1;text-align:right;font-size:13px;color:#94a3b8;line-height:2">'
-            f'<div>每股成本 ${cost:.2f}</div>'
-            f'<div style="color:{tot_hex};font-weight:600">總損益 {t_sign}${abs(total_pnl):,.0f}</div>'
-            f'<div style="font-size:12px;color:{tot_hex}">{t_sign}{total_pnl_pct:.1f}%</div>'
+            f'<div style="flex:1;text-align:right;font-size:12px;color:#64748b;line-height:2">'
+            f'<div>成本 ${cost:.2f}</div>'
+            f'<div style="color:{tot_hex};font-weight:700;font-family:\'SF Mono\',monospace">'
+            f'{t_sign}${abs(total_pnl):,.0f}</div>'
+            f'<div style="font-size:11px;color:{tot_hex};font-family:\'SF Mono\',monospace">'
+            f'{t_sign}{total_pnl_pct:.1f}%</div>'
             f'</div>'
             f'</div>'
         )
