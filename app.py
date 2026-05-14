@@ -152,6 +152,46 @@ def append_history(portfolio_val: float, cash_val: float):
         pass
 
 
+# 出入金明細：(日期, 金額)  正數=入金, 負數=出金
+TRANSACTIONS = [
+    ("2022-06-07",  5469.56),
+    ("2022-12-02", -1030.00),
+    ("2023-11-15", -2030.00),
+    ("2025-06-05",  6178.00),
+    ("2026-03-18", 10025.70),
+]
+
+
+def calc_irr(terminal_value: float) -> float | None:
+    from datetime import datetime as dt
+    dates = [dt.strptime(d, "%Y-%m-%d") for d, _ in TRANSACTIONS]
+    t0 = dates[0]
+    times = [(d - t0).days / 365.25 for d in dates]
+    # 投資人視角：入金 = 負 CF，出金 = 正 CF
+    cfs = [-amt for _, amt in TRANSACTIONS]
+    times.append((dt.today() - t0).days / 365.25)
+    cfs.append(terminal_value)
+
+    def npv(r):
+        return sum(cf / (1 + r) ** t for cf, t in zip(cfs, times))
+
+    lo, hi = -0.99, 20.0
+    try:
+        if npv(lo) * npv(hi) > 0:
+            return None
+        for _ in range(300):
+            mid = (lo + hi) / 2
+            if npv(mid) > 0:
+                lo = mid
+            else:
+                hi = mid
+            if hi - lo < 1e-9:
+                break
+        return (lo + hi) / 2
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=3600)
 def fetch_bench_data() -> pd.DataFrame:
     try:
@@ -569,23 +609,56 @@ with tab4:
 # Tab 5 — 績效
 # ════════════════════════════════════════════════════
 with tab5:
-    # ── 未實現損益（簡單報酬）───────────────────────
-    total_cost = sum(float(r["shares"]) * float(r["cost"]) for _, r in portfolio.iterrows())
-    simple_pnl = portfolio_value - total_cost
-    simple_pct = simple_pnl / total_cost * 100 if total_cost > 0 else 0
-    s_sign = "+" if simple_pnl >= 0 else ""
-    s_color = "#00e676" if simple_pnl >= 0 else "#ff5252"
+    # ── IRR 年化報酬率 ──────────────────────────────
+    total_assets5 = portfolio_value + cash
+    irr = calc_irr(total_assets5)
+    total_deposited = sum(amt for _, amt in TRANSACTIONS if amt > 0)
+    total_withdrawn = sum(-amt for _, amt in TRANSACTIONS if amt < 0)
+    net_invested = total_deposited - total_withdrawn
+    moic = (total_assets5 + total_withdrawn) / total_deposited if total_deposited > 0 else 0
+
+    if irr is not None:
+        irr_pct = irr * 100
+        irr_color = "#00e676" if irr >= 0 else "#ff5252"
+        irr_sign = "+" if irr >= 0 else ""
+        irr_str = f"{irr_sign}{irr_pct:.1f}%"
+    else:
+        irr_str, irr_color = "—", "#64748b"
 
     st.markdown(
         f'<div class="summary-box">'
-        f'<div style="font-size:11px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase">持倉未實現損益</div>'
-        f'<div style="font-size:28px;font-weight:700;color:{s_color};margin-top:2px">{s_sign}{simple_pct:.1f}%</div>'
-        f'<div style="font-size:13px;color:#94a3b8;margin-top:2px">{s_sign}${abs(simple_pnl):,.0f}&ensp;·&ensp;成本 ${total_cost:,.0f}</div>'
-        f'<div style="font-size:10px;color:#4b5563;margin-top:8px;line-height:1.5">'
-        f'未計入出入金時點，年化報酬率請提供交易明細。</div>'
+        f'<div style="font-size:11px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase">年化報酬率（IRR / MWR）</div>'
+        f'<div style="font-size:32px;font-weight:700;color:{irr_color};margin-top:4px">{irr_str}</div>'
+        f'<div style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:#64748b;">'
+        f'<div>總投入 <b style="color:#e2e8f0">${total_deposited:,.0f}</b></div>'
+        f'<div>已出金 <b style="color:#e2e8f0">${total_withdrawn:,.0f}</b></div>'
+        f'<div>現值 <b style="color:#00e5ff">${total_assets5:,.0f}</b></div>'
+        f'<div>MOIC <b style="color:#e2e8f0">{moic:.2f}x</b></div>'
+        f'</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
+
+    # ── 出入金明細 ──────────────────────────────────
+    tx_html = '<div style="font-size:12px;font-weight:600;color:#64748b;margin:14px 0 8px;letter-spacing:0.5px">出入金明細</div>'
+    tx_html += '<div style="background:#111827;border-radius:10px;overflow:hidden;">'
+    for d, amt in TRANSACTIONS:
+        is_in = amt > 0
+        label = "入金" if is_in else "出金"
+        color = "#00e676" if is_in else "#ff5252"
+        sign = "+" if is_in else ""
+        tx_html += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;">'
+            f'<div style="color:#94a3b8">{d}</div>'
+            f'<div style="color:{color};font-weight:600;font-size:11px;'
+            f'background:rgba({"0,230,118" if is_in else "255,82,82"},0.12);'
+            f'padding:2px 8px;border-radius:4px">{label}</div>'
+            f'<div style="color:{color};font-weight:700">{sign}${abs(amt):,.2f}</div>'
+            f'</div>'
+        )
+    tx_html += '</div>'
+    st.markdown(tx_html, unsafe_allow_html=True)
 
     # ── 指數比較表 ──────────────────────────────────
     bench_df = fetch_bench_data()
@@ -686,19 +759,6 @@ with tab5:
         else:
             st.caption("歷史記錄不足兩筆，無法繪製走勢對照圖。")
 
-    # ── 年化報酬率（IRR）待補 ───────────────────────
-    st.markdown(
-        '<div style="margin-top:16px;padding:12px 14px;background:#111827;'
-        'border:1px solid rgba(0,229,255,0.12);border-radius:10px;">'
-        '<div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">📋 年化報酬率（IRR / MWR）</div>'
-        '<div style="font-size:12px;color:#4b5563;line-height:1.7">'
-        '提供出入金明細後可計算：<br>'
-        '日期 ・ 金額（正數＝入金，負數＝出金）<br>'
-        '<span style="color:#00e5ff">→ 計算 Money-Weighted Return，並與指數年化報酬比較</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
 
     # ── 股東權益 ────────────────────────────────────
     dad_val = total_assets4 * 0.40
