@@ -162,13 +162,14 @@ TRANSACTIONS = [
 ]
 
 
-def calc_irr(terminal_value: float) -> float | None:
+def calc_irr(terminal_value: float, transactions=None) -> float | None:
     from datetime import datetime as dt
-    dates = [dt.strptime(d, "%Y-%m-%d") for d, _ in TRANSACTIONS]
+    txns = transactions if transactions is not None else TRANSACTIONS
+    dates = [dt.strptime(d, "%Y-%m-%d") for d, _ in txns]
     t0 = dates[0]
     times = [(d - t0).days / 365.25 for d in dates]
     # 投資人視角：入金 = 負 CF，出金 = 正 CF
-    cfs = [-amt for _, amt in TRANSACTIONS]
+    cfs = [-amt for _, amt in txns]
     times.append((dt.today() - t0).days / 365.25)
     cfs.append(terminal_value)
 
@@ -634,6 +635,35 @@ with tab5:
         f'<div>已出金 <b style="color:#e2e8f0">${total_withdrawn:,.0f}</b></div>'
         f'<div>現值 <b style="color:#00e5ff">${total_assets5:,.0f}</b></div>'
         f'<div>MOIC <b style="color:#e2e8f0">{moic:.2f}x</b></div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── IRR（2025/6/5 後子期間）───────────────────────
+    txns_recent = [(d, amt) for d, amt in TRANSACTIONS if d >= "2025-06-05"]
+    irr2 = calc_irr(total_assets5, transactions=txns_recent)
+    dep2 = sum(amt for _, amt in txns_recent if amt > 0)
+    wth2 = sum(-amt for _, amt in txns_recent if amt < 0)
+    moic2 = (total_assets5 + wth2) / dep2 if dep2 > 0 else 0
+
+    if irr2 is not None:
+        irr2_pct = irr2 * 100
+        irr2_color = "#00e676" if irr2 >= 0 else "#ff5252"
+        irr2_sign = "+" if irr2 >= 0 else ""
+        irr2_str = f"{irr2_sign}{irr2_pct:.1f}%"
+    else:
+        irr2_str, irr2_color = "—", "#64748b"
+
+    st.markdown(
+        f'<div style="background:linear-gradient(135deg,#0d2a1a,#0a3a1f);border:1px solid rgba(0,230,118,0.2);'
+        f'border-radius:14px;padding:14px 18px;margin-bottom:12px;">'
+        f'<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">年化報酬（2025/6/5 起）</div>'
+        f'<div style="font-size:28px;font-weight:700;color:{irr2_color};margin-top:4px">{irr2_str}</div>'
+        f'<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:#64748b;">'
+        f'<div>投入 <b style="color:#e2e8f0">${dep2:,.0f}</b></div>'
+        f'<div>現值 <b style="color:#00e5ff">${total_assets5:,.0f}</b></div>'
+        f'<div>MOIC <b style="color:#e2e8f0">{moic2:.2f}x</b></div>'
         f'</div>'
         f'</div>',
         unsafe_allow_html=True,
