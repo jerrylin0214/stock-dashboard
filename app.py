@@ -716,6 +716,8 @@ with tab4:
     # ── 分類細項 ────────────────────────────────────
     detail_html = ""
     for cat, (tickers, color) in CATS.items():
+        if cat not in cat_vals:
+            continue
         val, _ = cat_vals[cat]
         pct = val / total_assets4 * 100 if total_assets4 > 0 else 0
         if cat == "現金":
