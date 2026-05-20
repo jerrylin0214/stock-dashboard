@@ -940,7 +940,14 @@ with tab5:
     dad_val = total_assets4 * 0.40
     mom_val = total_assets4 * 0.40
     bro_val = total_assets4 * 0.20
-    dad_cost, mom_cost, bro_cost = 10000, 10000, 5000
+    # 成本 = 起始餘額 + 後續所有入金，依比例分配
+    _sh_txns = load_transactions()
+    _sh_sub_date, _sh_sub_val = load_sub_period()
+    _sh_deposits = sum(amt for d, amt in _sh_txns if d >= _sh_sub_date and amt > 0)
+    _sh_total_cost = _sh_sub_val + _sh_deposits
+    dad_cost = _sh_total_cost * 0.40
+    mom_cost = _sh_total_cost * 0.40
+    bro_cost = _sh_total_cost * 0.20
 
     def _pnl_color(val, cost):
         return "#27ae60" if val >= cost else "#e74c3c"
@@ -959,7 +966,7 @@ with tab5:
         '<div style="font-size:12px;color:#64748b">40%</div>'
         f'<div style="font-size:15px;font-weight:700;color:#00e5ff;margin-top:6px">${dad_val:,.0f}</div>'
         f'<div style="font-size:11px;color:{_pnl_color(dad_val,dad_cost)};margin-top:3px">{_pnl_str(dad_val,dad_cost)}</div>'
-        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${dad_cost:,}</div>'
+        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${dad_cost:,.0f}</div>'
         '</div>'
         '<div style="flex:1;background:linear-gradient(160deg,#1f0d2a,#2a0a3a);border:1px solid rgba(200,100,255,0.2);border-radius:14px;padding:14px 8px;text-align:center;">'
         '<div style="font-size:32px">👩</div>'
@@ -967,7 +974,7 @@ with tab5:
         '<div style="font-size:12px;color:#64748b">40%</div>'
         f'<div style="font-size:15px;font-weight:700;color:#c084fc;margin-top:6px">${mom_val:,.0f}</div>'
         f'<div style="font-size:11px;color:{_pnl_color(mom_val,mom_cost)};margin-top:3px">{_pnl_str(mom_val,mom_cost)}</div>'
-        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${mom_cost:,}</div>'
+        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${mom_cost:,.0f}</div>'
         '</div>'
         '<div style="flex:1;background:linear-gradient(160deg,#0d2a1a,#0a3a1f);border:1px solid rgba(0,230,118,0.2);border-radius:14px;padding:14px 8px;text-align:center;">'
         '<div style="font-size:32px">👦</div>'
@@ -975,7 +982,7 @@ with tab5:
         '<div style="font-size:12px;color:#64748b">20%</div>'
         f'<div style="font-size:15px;font-weight:700;color:#00e676;margin-top:6px">${bro_val:,.0f}</div>'
         f'<div style="font-size:11px;color:{_pnl_color(bro_val,bro_cost)};margin-top:3px">{_pnl_str(bro_val,bro_cost)}</div>'
-        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${bro_cost:,}</div>'
+        f'<div style="font-size:10px;color:#475569;margin-top:1px">成本 ${bro_cost:,.0f}</div>'
         '</div>'
         '</div>'
     )
