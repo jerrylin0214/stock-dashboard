@@ -192,8 +192,8 @@ def append_history(portfolio_val: float, cash_val: float):
         pass
 
 
-# 出入金明細：(日期, 金額)  正數=入金, 負數=出金
-TRANSACTIONS = [
+# 出入金明細備用（Secrets 優先）
+_TRANSACTIONS_FALLBACK = [
     ("2022-06-07",  5469.56),
     ("2022-12-02", -1030.00),
     ("2023-11-15", -2030.00),
@@ -201,11 +201,31 @@ TRANSACTIONS = [
     ("2026-03-18", 10025.70),
     ("2026-05-18",  2510.00),
 ]
+_SUB_START_FALLBACK = ("2025-06-05", 8857.84)
+
+
+def load_transactions():
+    if "transactions" in st.secrets:
+        tx = st.secrets["transactions"]
+        dates   = [d.strip() for d in tx["dates"].split(",")]
+        amounts = [float(a.strip()) for a in tx["amounts"].split(",")]
+        return list(zip(dates, amounts))
+    return _TRANSACTIONS_FALLBACK
+
+
+def load_sub_period():
+    if "transactions" in st.secrets:
+        tx = st.secrets["transactions"]
+        return (
+            tx.get("sub_start_date", _SUB_START_FALLBACK[0]),
+            float(tx.get("sub_start_value", _SUB_START_FALLBACK[1])),
+        )
+    return _SUB_START_FALLBACK
 
 
 def calc_irr(terminal_value: float, transactions=None) -> float | None:
     from datetime import datetime as dt
-    txns = transactions if transactions is not None else TRANSACTIONS
+    txns = transactions if transactions is not None else _TRANSACTIONS_FALLBACK
     dates = [dt.strptime(d, "%Y-%m-%d") for d, _ in txns]
     t0 = dates[0]
     times = [(d - t0).days / 365.25 for d in dates]
@@ -707,12 +727,15 @@ with tab4:
 # Tab 5 — 績效
 # ════════════════════════════════════════════════════
 with tab5:
-    # ── IRR 年化報酬率 ──────────────────────────────
+    # ── 載入出入金資料 ──────────────────────────────
+    txns = load_transactions()
+    sub_start_date, sub_start_value = load_sub_period()
+
+    # ── IRR 全期 ─────────────────────────────────────
     total_assets5 = portfolio_value + cash
-    irr = calc_irr(total_assets5)
-    total_deposited = sum(amt for _, amt in TRANSACTIONS if amt > 0)
-    total_withdrawn = sum(-amt for _, amt in TRANSACTIONS if amt < 0)
-    net_invested = total_deposited - total_withdrawn
+    irr = calc_irr(total_assets5, transactions=txns)
+    total_deposited = sum(amt for _, amt in txns if amt > 0)
+    total_withdrawn = sum(-amt for _, amt in txns if amt < 0)
     moic = (total_assets5 + total_withdrawn) / total_deposited if total_deposited > 0 else 0
 
     if irr is not None:
@@ -737,16 +760,15 @@ with tab5:
         unsafe_allow_html=True,
     )
 
-    # ── IRR（2025/6/5 後子期間）───────────────────────
-    # 2025/5 底實際帳戶餘額（用戶提供）
-    SUB_START_VALUE = 8857.84
-    txns_recent = [("2025-06-05", SUB_START_VALUE)] + [
-        (d, amt) for d, amt in TRANSACTIONS if d >= "2025-06-05"
+    # ── IRR 子期間 ───────────────────────────────────
+    txns_recent = [(sub_start_date, sub_start_value)] + [
+        (d, amt) for d, amt in txns if d >= sub_start_date
     ]
     irr2 = calc_irr(total_assets5, transactions=txns_recent)
     dep2 = sum(amt for _, amt in txns_recent if amt > 0)
     wth2 = sum(-amt for _, amt in txns_recent if amt < 0)
     moic2 = total_assets5 / (dep2 - wth2) if (dep2 - wth2) > 0 else 0
+    sub_label = sub_start_date.replace("-", "/")[:7]  # e.g. "2025/06"
 
     if irr2 is not None:
         irr2_pct = irr2 * 100
@@ -759,15 +781,14 @@ with tab5:
     st.markdown(
         f'<div style="background:linear-gradient(135deg,#0d2a1a,#0a3a1f);border:1px solid rgba(0,230,118,0.2);'
         f'border-radius:14px;padding:14px 18px;margin-bottom:12px;">'
-        f'<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">年化報酬（2025/6/5 起）</div>'
+        f'<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">年化報酬（{sub_label} 起）</div>'
         f'<div style="font-size:28px;font-weight:700;color:{irr2_color};margin-top:4px">{irr2_str}</div>'
         f'<div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#64748b;flex-wrap:wrap;">'
-        f'<div>起始餘額 <b style="color:#e2e8f0">${SUB_START_VALUE:,.0f}</b></div>'
-        f'<div>後續入金 <b style="color:#e2e8f0">${sum(amt for d,amt in TRANSACTIONS if d>="2025-06-05" and amt>0):,.0f}</b></div>'
+        f'<div>起始餘額 <b style="color:#e2e8f0">${sub_start_value:,.0f}</b></div>'
+        f'<div>後續入金 <b style="color:#e2e8f0">${sum(amt for d,amt in txns if d>=sub_start_date and amt>0):,.0f}</b></div>'
         f'<div>現值 <b style="color:#00e5ff">${total_assets5:,.0f}</b></div>'
         f'<div>MOIC <b style="color:#e2e8f0">{moic2:.2f}x</b></div>'
         f'</div>'
-        f'<div style="font-size:10px;color:#374151;margin-top:6px">起始餘額為 2025/5 底實際帳戶總值</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -775,7 +796,7 @@ with tab5:
     # ── 出入金明細 ──────────────────────────────────
     tx_html = '<div style="font-size:12px;font-weight:600;color:#64748b;margin:14px 0 8px;letter-spacing:0.5px">出入金明細</div>'
     tx_html += '<div style="background:#111827;border-radius:10px;overflow:hidden;">'
-    for d, amt in TRANSACTIONS:
+    for d, amt in txns:
         is_in = amt > 0
         label = "入金" if is_in else "出金"
         color = "#00e676" if is_in else "#ff5252"
