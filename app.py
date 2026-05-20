@@ -205,22 +205,35 @@ _SUB_START_FALLBACK = ("2025-06-05", 8857.84)
 
 
 def load_transactions():
-    if "transactions" in st.secrets:
-        tx = st.secrets["transactions"]
-        dates   = [d.strip() for d in tx["dates"].split(",")]
-        amounts = [float(a.strip()) for a in tx["amounts"].split(",")]
-        return list(zip(dates, amounts))
+    try:
+        if "transactions" in st.secrets:
+            tx = st.secrets["transactions"]
+            dates   = [d.strip() for d in str(tx["dates"]).split(",")]
+            amounts = [float(a.strip()) for a in str(tx["amounts"]).split(",")]
+            if len(dates) == len(amounts):
+                return list(zip(dates, amounts))
+    except Exception:
+        pass
     return _TRANSACTIONS_FALLBACK
 
 
 def load_sub_period():
-    if "transactions" in st.secrets:
-        tx = st.secrets["transactions"]
-        return (
-            tx.get("sub_start_date", _SUB_START_FALLBACK[0]),
-            float(tx.get("sub_start_value", _SUB_START_FALLBACK[1])),
-        )
+    try:
+        if "transactions" in st.secrets:
+            tx = st.secrets["transactions"]
+            sd = str(tx["sub_start_date"]).strip()
+            sv = float(str(tx["sub_start_value"]).strip())
+            return sd, sv
+    except Exception:
+        pass
     return _SUB_START_FALLBACK
+
+
+def _tx_source() -> str:
+    try:
+        return "Secrets ✓" if ("transactions" in st.secrets and "dates" in st.secrets["transactions"]) else "備用資料"
+    except Exception:
+        return "備用資料"
 
 
 def calc_irr(terminal_value: float, transactions=None) -> float | None:
@@ -794,7 +807,14 @@ with tab5:
     )
 
     # ── 出入金明細 ──────────────────────────────────
-    tx_html = '<div style="font-size:12px;font-weight:600;color:#64748b;margin:14px 0 8px;letter-spacing:0.5px">出入金明細</div>'
+    src = _tx_source()
+    src_color = "#00e676" if "✓" in src else "#f8c471"
+    tx_html = (
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;">'
+        f'<div style="font-size:12px;font-weight:600;color:#64748b;letter-spacing:0.5px">出入金明細</div>'
+        f'<div style="font-size:10px;color:{src_color};font-family:monospace">{src}</div>'
+        f'</div>'
+    )
     tx_html += '<div style="background:#111827;border-radius:10px;overflow:hidden;">'
     for d, amt in txns:
         is_in = amt > 0
