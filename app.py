@@ -668,7 +668,7 @@ with tab4:
     # 分類定義：(成員list, 顏色)
     CATS = {
         "AI / 半導體": (["NVDA", "AMD", "INTC", "SMCI", "ALAB"], "#00e5ff"),
-        "科技大型股":  (["AAPL", "AMZN", "META", "TSLA"],         "#c084fc"),
+        "科技大型股":  (["AAPL", "AMZN", "META", "TSLA", "GOOG"],  "#c084fc"),
         "太空 / 新興": (["ASTS", "PLTR", "PATH", "PACB"],          "#00e676"),
         "槓桿 ETF":   (["SOXL", "TQQQ", "TECL", "UPRO", "SPXL",
                         "FNGU", "TSLL", "NVDL", "LABU", "WEBL",
