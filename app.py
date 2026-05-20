@@ -637,16 +637,20 @@ with tab4:
         "AI / 半導體": (["NVDA", "AMD", "INTC", "SMCI", "ALAB"], "#00e5ff"),
         "科技大型股":  (["AAPL", "AMZN", "META", "TSLA"],         "#c084fc"),
         "太空 / 新興": (["ASTS", "PLTR", "PATH", "PACB"],          "#00e676"),
-        "ETF":        (["VOO"],                                    "#f8c471"),
+        "槓桿 ETF":   (["SOXL", "TQQQ", "TECL", "UPRO", "SPXL",
+                        "FNGU", "TSLL", "NVDL", "LABU", "WEBL",
+                        "TNA",  "NAIL", "DFEN", "WANT", "RETL"], "#fb923c"),
+        "ETF":        (["VOO", "QQQ", "SPY", "IWM", "VTI"],       "#f8c471"),
         "其他":       (["CCL", "DJT"],                             "#94a3b8"),
         "現金":       ([],                                          "#2d3748"),
     }
 
-    # 各類別總市值
+    # 各類別總市值（過濾掉 0 值的類別，現金除外）
     cat_vals = {}
     for cat, (tickers, color) in CATS.items():
         val = cash if cat == "現金" else sum(stock_vals.get(t, 0) for t in tickers)
-        cat_vals[cat] = (val, color)
+        if val > 0 or cat == "現金":
+            cat_vals[cat] = (val, color)
 
     # ── 圓餅圖 ──────────────────────────────────────
     fig_pie = go.Figure(go.Pie(
