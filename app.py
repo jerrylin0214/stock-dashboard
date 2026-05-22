@@ -76,6 +76,26 @@ st.markdown("""
         margin-bottom: 2px;
     }
 
+    /* ── Expander 深色風格 ── */
+    details[data-testid="stExpander"] {
+        border: 1px solid rgba(255,255,255,0.07) !important;
+        border-radius: 10px !important;
+        margin-bottom: 3px !important;
+        background: transparent !important;
+    }
+    details[data-testid="stExpander"][open] {
+        border-color: rgba(0,229,255,0.18) !important;
+        box-shadow: 0 0 12px rgba(0,229,255,0.04);
+    }
+    details[data-testid="stExpander"] summary {
+        font-family: 'SF Mono','Consolas',monospace !important;
+        font-size: 13px !important;
+        padding: 10px 14px !important;
+        color: #e2e8f0 !important;
+    }
+    details[data-testid="stExpander"] summary:hover { color: #00e5ff !important; }
+    details[data-testid="stExpander"] summary svg { color: #4b5563 !important; }
+
     /* ── 滾動條 ── */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: #0a0e1a; }
@@ -298,18 +318,21 @@ def estimate_stock_value_at(date_str: str, tickers_shares: tuple) -> float:
 
 
 @st.cache_data(ttl=120)
-def fetch_intraday(ticker: str) -> pd.DataFrame:
+def fetch_intraday(ticker: str) -> pd.Series:
     try:
-        df = yf.download(ticker, period="1d", interval="5m", auto_adjust=True, progress=False)
-        if df.empty:
-            return pd.DataFrame()
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert("America/New_York").tz_localize(None)
-        return df[["Open", "Close"]].dropna()
+        raw = yf.download(ticker, period="1d", interval="5m",
+                          auto_adjust=True, progress=False)
+        if raw.empty:
+            return pd.Series(dtype=float)
+        close = raw["Close"]
+        if isinstance(close, pd.DataFrame):
+            close = close.iloc[:, 0]
+        close = close.dropna()
+        if hasattr(close.index, "tz") and close.index.tz is not None:
+            close.index = close.index.tz_convert("America/New_York")
+        return close
     except Exception:
-        return pd.DataFrame()
+        return pd.Series(dtype=float)
 
 
 @st.cache_data(ttl=3600)
@@ -429,8 +452,7 @@ with tab1:
     </div>
     """, unsafe_allow_html=True)
 
-    # 各股卡片
-    cards_html = ""
+    # 各股卡片（點開查看今日走勢）
     for _, row in portfolio.iterrows():
         ticker = row["ticker"]
         shares = float(row["shares"])
@@ -453,112 +475,57 @@ with tab1:
         chg_hex = "#00e676" if change >= 0 else "#ff5252"
         day_hex = "#00e676" if daily_pnl >= 0 else "#ff5252"
         tot_hex = "#00e676" if total_pnl >= 0 else "#ff5252"
-        bar_color = "#00e676" if daily_pnl >= 0 else "#ff5252"
-        bg_tint = "rgba(0,230,118,0.04)" if daily_pnl >= 0 else "rgba(255,82,82,0.04)"
+        d_arrow = "▲" if daily_pnl >= 0 else "▼"
 
-        cards_html += (
-            f'<div style="display:flex;justify-content:space-between;align-items:center;'
-            f'padding:12px 10px 12px 14px;'
-            f'border-bottom:1px solid rgba(255,255,255,0.06);'
-            f'border-left:2px solid {bar_color};'
-            f'background:linear-gradient(90deg,{bg_tint},transparent);'
-            f'gap:4px;">'
-            f'<div style="flex:1">'
-            f'<div style="font-size:13px;font-weight:800;color:#e2e8f0;letter-spacing:1.5px;'
-            f'font-family:\'SF Mono\',monospace">{ticker}</div>'
-            f'<div style="font-size:21px;font-weight:700;color:#f8fafc;'
-            f'font-family:\'SF Mono\',monospace;letter-spacing:-0.5px">${price:.2f}</div>'
-            f'<div style="font-size:12px;color:{chg_hex};font-weight:600;'
-            f'font-family:\'SF Mono\',monospace">{sign}{change:.2f}&nbsp;({sign}{pct:.2f}%)</div>'
-            f'</div>'
-            f'<div style="flex:1;text-align:center;font-size:12px;color:#64748b;line-height:2">'
-            f'<div>{shares:g} 股</div>'
-            f'<div style="color:{day_hex};font-weight:700;font-family:\'SF Mono\',monospace">'
-            f'Today {d_sign}${abs(daily_pnl):,.0f}</div>'
-            f'</div>'
-            f'<div style="flex:1;text-align:right;font-size:12px;color:#64748b;line-height:2">'
-            f'<div>成本 ${cost:.2f}</div>'
-            f'<div style="color:{tot_hex};font-weight:700;font-family:\'SF Mono\',monospace">'
-            f'{t_sign}${abs(total_pnl):,.0f}</div>'
-            f'<div style="font-size:11px;color:{tot_hex};font-family:\'SF Mono\',monospace">'
-            f'{t_sign}{total_pnl_pct:.1f}%</div>'
-            f'</div>'
-            f'</div>'
-        )
+        label = (f"{d_arrow} {ticker}   ${price:.2f}   "
+                 f"{sign}{pct:.2f}%   │   Today {d_sign}${abs(daily_pnl):,.0f}")
 
-    st.markdown(cards_html, unsafe_allow_html=True)
-
-    # ── 個股今日走勢 ─────────────────────────────────
-    ticker_list = [row["ticker"] for _, row in portfolio.iterrows() if row["ticker"] in prices]
-    selected = st.selectbox(
-        "個股走勢",
-        ["— 選擇個股 —"] + ticker_list,
-        label_visibility="collapsed",
-    )
-    if selected and selected != "— 選擇個股 —":
-        intraday = fetch_intraday(selected)
-        p_data = prices.get(selected, {})
-        curr_price = p_data.get("price", 0)
-        change    = p_data.get("change", 0)
-        pct       = p_data.get("pct", 0)
-        sign      = "+" if change >= 0 else ""
-        px_color  = "#00e676" if change >= 0 else "#ff5252"
-
-        st.markdown(
-            f'<div style="display:flex;justify-content:space-between;align-items:baseline;'
-            f'padding:10px 2px 8px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;">'
-            f'<div style="font-size:14px;font-weight:800;color:#e2e8f0;'
-            f'font-family:\'SF Mono\',monospace;letter-spacing:1.5px">{selected}</div>'
-            f'<div style="text-align:right;">'
-            f'<span style="font-size:18px;font-weight:700;color:#f8fafc;'
-            f'font-family:\'SF Mono\',monospace">${curr_price:.2f}</span>'
-            f'<span style="font-size:12px;color:{px_color};margin-left:8px;'
-            f'font-family:\'SF Mono\',monospace">{sign}{change:.2f} ({sign}{pct:.2f}%)</span>'
-            f'</div></div>',
-            unsafe_allow_html=True,
-        )
-
-        if not intraday.empty:
-            ref_price = float(intraday["Open"].iloc[0])
-            line_color = "#00e676" if curr_price >= ref_price else "#ff5252"
-            fill_color = ("rgba(0,230,118,0.07)" if curr_price >= ref_price
-                          else "rgba(255,82,82,0.07)")
-
-            fig_intra = go.Figure()
-            fig_intra.add_hline(
-                y=ref_price,
-                line=dict(color="rgba(255,255,255,0.15)", width=1, dash="dot"),
+        with st.expander(label):
+            # 持倉細節
+            st.markdown(
+                f'<div style="display:flex;justify-content:space-between;'
+                f'padding:4px 2px 8px;font-size:12px;">'
+                f'<div style="color:#64748b;line-height:2">'
+                f'<div>{shares:g} 股&ensp;·&ensp;成本 ${cost:.2f}</div>'
+                f'<div style="color:{tot_hex};font-weight:600">'
+                f'總損益 {t_sign}${abs(total_pnl):,.0f}&ensp;({t_sign}{total_pnl_pct:.1f}%)</div>'
+                f'</div>'
+                f'<div style="text-align:right;line-height:2">'
+                f'<div style="color:{chg_hex};font-weight:600;font-family:monospace">'
+                f'{sign}{change:.2f} ({sign}{pct:.2f}%)</div>'
+                f'<div style="color:{day_hex};font-weight:700;font-family:monospace">'
+                f'Today {d_sign}${abs(daily_pnl):,.0f}</div>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
             )
-            fig_intra.add_trace(go.Scatter(
-                x=intraday.index,
-                y=intraday["Close"],
-                mode="lines",
-                line=dict(color=line_color, width=2),
-                fill="tozeroy",
-                fillcolor=fill_color,
-                hovertemplate="%{x|%H:%M} &nbsp;$%{y:.2f}<extra></extra>",
-            ))
-            fig_intra.update_layout(
-                margin=dict(t=6, b=0, l=0, r=0),
-                height=180,
-                paper_bgcolor="#0a0e1a",
-                plot_bgcolor="#0a0e1a",
-                xaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(size=10, color="#64748b"),
-                    tickformat="%H:%M",
-                    linecolor="rgba(255,255,255,0.06)",
-                ),
-                yaxis=dict(
-                    gridcolor="rgba(255,255,255,0.04)",
-                    tickfont=dict(size=10, color="#64748b"),
-                    tickprefix="$",
-                ),
-                hovermode="x unified",
-            )
-            st.plotly_chart(fig_intra, use_container_width=True)
-        else:
-            st.caption("今日無盤中資料（市場可能未開盤）")
+            # 今日走勢圖
+            intraday = fetch_intraday(ticker)
+            if not intraday.empty:
+                line_color = "#00e676" if float(intraday.iloc[-1]) >= float(intraday.iloc[0]) else "#ff5252"
+                fill_color = "rgba(0,230,118,0.07)" if line_color == "#00e676" else "rgba(255,82,82,0.07)"
+                fig_i = go.Figure(go.Scatter(
+                    x=intraday.index, y=intraday.values,
+                    mode="lines",
+                    line=dict(color=line_color, width=1.8),
+                    fill="tozeroy", fillcolor=fill_color,
+                    hovertemplate="$%{y:.2f}<extra></extra>",
+                ))
+                fig_i.update_layout(
+                    margin=dict(t=4, b=0, l=0, r=0),
+                    height=150,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"),
+                               tickformat="%H:%M"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.04)",
+                               tickfont=dict(size=9, color="#4b5563"),
+                               tickprefix="$", side="right"),
+                    hovermode="x unified",
+                )
+                st.plotly_chart(fig_i, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.caption("暫無盤中資料")
 
     # 編輯持倉（本機才顯示）
     if not IS_CLOUD:
