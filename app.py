@@ -7,6 +7,7 @@ import os
 import base64
 import requests
 import io
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="美股績效追蹤",
@@ -76,23 +77,27 @@ st.markdown("""
         margin-bottom: 2px;
     }
 
-    /* ── 走勢展開按鈕 ── */
-    div[data-testid="stButton"] > button[kind="secondary"] {
-        background: transparent !important;
+    /* ── 股票卡片 Expander ── */
+    [data-testid="stExpander"] {
         border: none !important;
-        border-top: 1px solid rgba(255,255,255,0.05) !important;
-        color: #374151 !important;
-        font-size: 10px !important;
-        letter-spacing: 1px !important;
-        padding: 3px 0 !important;
-        height: auto !important;
-        min-height: 0 !important;
-        border-radius: 0 !important;
-        margin-bottom: 2px !important;
+        box-shadow: none !important;
+        background: transparent !important;
     }
-    div[data-testid="stButton"] > button[kind="secondary"]:hover {
-        color: #00e5ff !important;
-        border-top-color: rgba(0,229,255,0.2) !important;
+    [data-testid="stExpander"] details {
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+    }
+    [data-testid="stExpander"] details > summary {
+        padding: 0 !important;
+        list-style: none !important;
+        cursor: pointer !important;
+    }
+    [data-testid="stExpander"] details > summary::-webkit-details-marker { display: none; }
+    [data-testid="stExpander"] details > summary > span { display: none !important; }
+    [data-testid="stExpander"] details > div[data-testid="stExpanderDetails"] {
+        padding: 0 !important;
+        border-top: none !important;
     }
 
     /* ── 滾動條 ── */
@@ -449,33 +454,36 @@ with tab1:
     </div>
     """, unsafe_allow_html=True)
 
-    # 各股卡片（逐張渲染，支援展開走勢圖）
+    # 各股卡片 — 點擊整列展開今日走勢（components.html + <details>/<summary>）
+    _items_html = ""
+    _has_intraday = False
+
     for _, row in portfolio.iterrows():
         ticker = row["ticker"]
         shares = float(row["shares"])
-        cost = float(row["cost"])
+        cost   = float(row["cost"])
 
         if ticker not in prices:
             continue
 
-        p = prices[ticker]
-        price = p["price"]
-        change = p["change"]
-        pct = p["pct"]
+        p         = prices[ticker]
+        price     = p["price"]
+        change    = p["change"]
+        pct       = p["pct"]
         daily_pnl = change * shares
         total_pnl = (price - cost) * shares
         total_pnl_pct = (price - cost) / cost * 100 if cost > 0 else 0
 
-        sign = "+" if change >= 0 else ""
+        sign  = "+" if change    >= 0 else ""
         d_sign = "+" if daily_pnl >= 0 else ""
         t_sign = "+" if total_pnl >= 0 else ""
-        chg_hex = "#00e676" if change >= 0 else "#ff5252"
-        day_hex = "#00e676" if daily_pnl >= 0 else "#ff5252"
-        tot_hex = "#00e676" if total_pnl >= 0 else "#ff5252"
+        chg_hex   = "#00e676" if change    >= 0 else "#ff5252"
+        day_hex   = "#00e676" if daily_pnl >= 0 else "#ff5252"
+        tot_hex   = "#00e676" if total_pnl >= 0 else "#ff5252"
         bar_color = "#00e676" if daily_pnl >= 0 else "#ff5252"
-        bg_tint = "rgba(0,230,118,0.04)" if daily_pnl >= 0 else "rgba(255,82,82,0.04)"
+        bg_tint   = "rgba(0,230,118,0.04)" if daily_pnl >= 0 else "rgba(255,82,82,0.04)"
 
-        st.markdown(
+        card_inner = (
             f'<div style="display:flex;justify-content:space-between;align-items:center;'
             f'padding:12px 10px 12px 14px;'
             f'border-left:2px solid {bar_color};'
@@ -501,44 +509,90 @@ with tab1:
             f'<div style="font-size:11px;color:{tot_hex};font-family:\'SF Mono\',monospace">'
             f'{t_sign}{total_pnl_pct:.1f}%</div>'
             f'</div>'
-            f'</div>',
-            unsafe_allow_html=True,
+            f'</div>'
         )
 
-        # ── 展開走勢按鈕 ──────────────────────────────
-        is_open = st.session_state.get(f"chart_{ticker}", False)
-        btn_label = f"▲ 收起" if is_open else f"📈 {ticker} 今日走勢"
-        if st.button(btn_label, key=f"chartbtn_{ticker}", use_container_width=True):
-            st.session_state[f"chart_{ticker}"] = not is_open
+        intra = fetch_intraday(ticker)
+        if not intra.empty:
+            open_price = float(intra["price"].iloc[0])
+            line_color = "#00e676" if float(intra["price"].iloc[-1]) >= open_price else "#ff5252"
+            fill_color = "rgba(0,230,118,0.06)" if line_color == "#00e676" else "rgba(255,82,82,0.06)"
+            fig_i = go.Figure(go.Scatter(
+                x=intra.index, y=intra["price"],
+                mode="lines",
+                line=dict(color=line_color, width=1.5),
+                fill="tozeroy", fillcolor=fill_color,
+                hovertemplate="%{x|%H:%M}&nbsp;&nbsp;$%{y:.2f}<extra></extra>",
+            ))
+            fig_i.update_layout(
+                height=160,
+                margin=dict(t=8, b=4, l=0, r=0),
+                paper_bgcolor="#0a0e1a",
+                plot_bgcolor="#0a0e1a",
+                xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"), tickformat="%H:%M"),
+                yaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"),
+                           tickprefix="$", tickformat=".2f"),
+                showlegend=False,
+                hovermode="x unified",
+            )
+            chart_html = fig_i.to_html(
+                full_html=False, include_plotlyjs=False,
+                config={"displayModeBar": False, "responsive": True},
+            )
+            _has_intraday = True
+        else:
+            chart_html = '<p style="color:#64748b;font-size:11px;padding:4px 14px 8px;">今日尚無交易資料</p>'
 
-        if st.session_state.get(f"chart_{ticker}"):
-            intra = fetch_intraday(ticker)
-            if not intra.empty:
-                open_price = float(intra["price"].iloc[0])
-                line_color = "#00e676" if float(intra["price"].iloc[-1]) >= open_price else "#ff5252"
-                fill_color = "rgba(0,230,118,0.06)" if line_color == "#00e676" else "rgba(255,82,82,0.06)"
-                fig_i = go.Figure(go.Scatter(
-                    x=intra.index, y=intra["price"],
-                    mode="lines",
-                    line=dict(color=line_color, width=1.5),
-                    fill="tozeroy", fillcolor=fill_color,
-                    hovertemplate="%{x|%H:%M}&nbsp;&nbsp;$%{y:.2f}<extra></extra>",
-                ))
-                fig_i.update_layout(
-                    height=150,
-                    margin=dict(t=4, b=0, l=0, r=0),
-                    paper_bgcolor="#0a0e1a",
-                    plot_bgcolor="#0a0e1a",
-                    xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"),
-                               tickformat="%H:%M"),
-                    yaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"),
-                               tickprefix="$", tickformat=".2f"),
-                    showlegend=False,
-                    hovermode="x unified",
-                )
-                st.plotly_chart(fig_i, use_container_width=True, key=f"intra_{ticker}")
-            else:
-                st.caption("今日尚無交易資料")
+        _items_html += (
+            f'<details>'
+            f'<summary>{card_inner}</summary>'
+            f'<div class="chart-wrap">{chart_html}</div>'
+            f'</details>'
+        )
+
+    _n = sum(1 for _, r in portfolio.iterrows() if r["ticker"] in prices)
+    _plotly_tag = (
+        '<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>'
+        if _has_intraday else ""
+    )
+    components.html(
+        f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+{_plotly_tag}
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
+details{{border-bottom:1px solid rgba(255,255,255,0.05)}}
+details>summary{{list-style:none;cursor:pointer;display:block;outline:none;
+  -webkit-tap-highlight-color:transparent;user-select:none}}
+details>summary::-webkit-details-marker{{display:none}}
+details>summary:hover{{filter:brightness(1.08)}}
+.chart-wrap{{background:#0a0e1a;padding:4px 8px 8px}}
+</style>
+<script>
+function sendH(){{
+  var h=document.body.scrollHeight;
+  window.parent.postMessage(
+    {{isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:h}},'*');
+}}
+document.addEventListener('DOMContentLoaded',function(){{
+  sendH();
+  document.querySelectorAll('details').forEach(function(el){{
+    el.addEventListener('toggle',function(){{setTimeout(sendH,350)}});
+  }});
+}});
+window.addEventListener('load',function(){{setTimeout(sendH,500)}});
+</script>
+</head>
+<body>
+{_items_html}
+</body>
+</html>""",
+        height=_n * 84 + 20,
+        scrolling=False,
+    )
 
     # 編輯持倉（本機才顯示）
     if not IS_CLOUD:
