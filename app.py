@@ -577,10 +577,19 @@ function sendH(){{
   window.parent.postMessage(
     {{isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:h}},'*');
 }}
+function resizePlotly(el){{
+  if(!window.Plotly) return;
+  el.querySelectorAll('.plotly-graph-div').forEach(function(div){{
+    Plotly.Plots.resize(div);
+  }});
+}}
 document.addEventListener('DOMContentLoaded',function(){{
   sendH();
   document.querySelectorAll('details').forEach(function(el){{
-    el.addEventListener('toggle',function(){{setTimeout(sendH,350)}});
+    el.addEventListener('toggle',function(){{
+      if(el.open) setTimeout(function(){{resizePlotly(el)}},50);
+      setTimeout(sendH,350);
+    }});
   }});
 }});
 window.addEventListener('load',function(){{setTimeout(sendH,500)}});
