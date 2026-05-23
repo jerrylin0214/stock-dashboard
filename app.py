@@ -307,6 +307,66 @@ def fetch_intraday(ticker: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def make_svg_chart(df: pd.DataFrame) -> str:
+    """純 SVG 折線圖，不依賴外部 JS，適合 iframe 內嵌。"""
+    prices = df["price"].tolist()
+    if len(prices) < 2:
+        return '<p style="color:#64748b;font-size:11px;padding:8px 14px">資料點不足</p>'
+
+    W, H = 400, 130
+    px, py = 46, 6   # left padding (for y labels), top/bottom padding
+    cw = W - px - 6
+    ch = H - py * 2 - 14  # 14 for bottom time labels
+
+    min_p = min(prices)
+    max_p = max(prices)
+    rng   = max_p - min_p or max_p * 0.001 or 1
+    n     = len(prices)
+
+    color      = "#00e676" if prices[-1] >= prices[0] else "#ff5252"
+    fill_rgba  = "rgba(0,230,118,0.07)" if color == "#00e676" else "rgba(255,82,82,0.07)"
+
+    def coord(i, p):
+        x = px + (i / (n - 1)) * cw
+        y = py + (1 - (p - min_p) / rng) * ch
+        return x, y
+
+    pts = [coord(i, p) for i, p in enumerate(prices)]
+    line_str = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    fill_str  = f"{px:.1f},{py + ch:.1f} " + line_str + f" {px + cw:.1f},{py + ch:.1f}"
+
+    # y-axis: current / min / max labels
+    cx, cy     = pts[-1]
+    curr_label = f"${prices[-1]:.2f}"
+    max_label  = f"${max_p:.2f}"
+    min_label  = f"${min_p:.2f}"
+    _, max_y   = coord(0, max_p)
+    _, min_y   = coord(0, min_p)
+
+    # x-axis: first & last timestamp
+    times   = df.index
+    t_first = times[0].strftime("%H:%M")  if len(times) else ""
+    t_last  = times[-1].strftime("%H:%M") if len(times) else ""
+
+    # grid lines (3 horizontal)
+    grid_svg = ""
+    for frac in [0.25, 0.5, 0.75]:
+        gy = py + frac * ch
+        grid_svg += f'<line x1="{px}" y1="{gy:.1f}" x2="{px+cw}" y2="{gy:.1f}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>'
+
+    return f"""<svg width="100%" height="{H}" viewBox="0 0 {W} {H}"
+     preserveAspectRatio="none" style="display:block;background:#0a0e1a;">
+  {grid_svg}
+  <polygon points="{fill_str}" fill="{fill_rgba}"/>
+  <polyline points="{line_str}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linejoin="round"/>
+  <text x="{px-3}" y="{cy+4:.1f}" text-anchor="end" font-size="9" fill="{color}" font-family="monospace">{curr_label}</text>
+  <text x="{px-3}" y="{min_y+4:.1f}" text-anchor="end" font-size="9" fill="#4b5563" font-family="monospace">{min_label}</text>
+  <text x="{px-3}" y="{max_y+8:.1f}" text-anchor="end" font-size="9" fill="#4b5563" font-family="monospace">{max_label}</text>
+  <text x="{px}" y="{H-1}" text-anchor="start" font-size="9" fill="#374151" font-family="monospace">{t_first}</text>
+  <text x="{px+cw}" y="{H-1}" text-anchor="end" font-size="9" fill="#374151" font-family="monospace">{t_last}</text>
+</svg>"""
+
+
 @st.cache_data(ttl=3600)
 def estimate_stock_value_at(date_str: str, tickers_shares: tuple) -> float:
     """用歷史收盤價估計某日的股票市值（假設持股數與現在相同）。"""
@@ -456,7 +516,6 @@ with tab1:
 
     # 各股卡片 — 點擊整列展開今日走勢（components.html + <details>/<summary>）
     _items_html = ""
-    _has_intraday = False
 
     for _, row in portfolio.iterrows():
         ticker = row["ticker"]
@@ -514,34 +573,9 @@ with tab1:
 
         intra = fetch_intraday(ticker)
         if not intra.empty:
-            open_price = float(intra["price"].iloc[0])
-            line_color = "#00e676" if float(intra["price"].iloc[-1]) >= open_price else "#ff5252"
-            fill_color = "rgba(0,230,118,0.06)" if line_color == "#00e676" else "rgba(255,82,82,0.06)"
-            fig_i = go.Figure(go.Scatter(
-                x=intra.index, y=intra["price"],
-                mode="lines",
-                line=dict(color=line_color, width=1.5),
-                fill="tozeroy", fillcolor=fill_color,
-                hovertemplate="%{x|%H:%M}&nbsp;&nbsp;$%{y:.2f}<extra></extra>",
-            ))
-            fig_i.update_layout(
-                height=160,
-                margin=dict(t=8, b=4, l=0, r=0),
-                paper_bgcolor="#0a0e1a",
-                plot_bgcolor="#0a0e1a",
-                xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"), tickformat="%H:%M"),
-                yaxis=dict(showgrid=False, tickfont=dict(size=9, color="#4b5563"),
-                           tickprefix="$", tickformat=".2f"),
-                showlegend=False,
-                hovermode="x unified",
-            )
-            chart_html = fig_i.to_html(
-                full_html=False, include_plotlyjs=False,
-                config={"displayModeBar": False, "responsive": True},
-            )
-            _has_intraday = True
+            chart_html = make_svg_chart(intra)
         else:
-            chart_html = '<p style="color:#64748b;font-size:11px;padding:4px 14px 8px;">今日尚無交易資料</p>'
+            chart_html = '<p style="color:#64748b;font-size:11px;padding:8px 14px;">今日尚無交易資料</p>'
 
         _items_html += (
             f'<details>'
@@ -551,16 +585,11 @@ with tab1:
         )
 
     _n = sum(1 for _, r in portfolio.iterrows() if r["ticker"] in prices)
-    _plotly_tag = (
-        '<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>'
-        if _has_intraday else ""
-    )
     components.html(
         f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-{_plotly_tag}
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
@@ -569,7 +598,7 @@ details>summary{{list-style:none;cursor:pointer;display:block;outline:none;
   -webkit-tap-highlight-color:transparent;user-select:none}}
 details>summary::-webkit-details-marker{{display:none}}
 details>summary:hover{{filter:brightness(1.08)}}
-.chart-wrap{{background:#0a0e1a;padding:4px 8px 8px}}
+.chart-wrap{{background:#0a0e1a;padding:0 0 6px}}
 </style>
 <script>
 function sendH(){{
@@ -577,22 +606,12 @@ function sendH(){{
   window.parent.postMessage(
     {{isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:h}},'*');
 }}
-function resizePlotly(el){{
-  if(!window.Plotly) return;
-  el.querySelectorAll('.plotly-graph-div').forEach(function(div){{
-    Plotly.Plots.resize(div);
-  }});
-}}
 document.addEventListener('DOMContentLoaded',function(){{
   sendH();
   document.querySelectorAll('details').forEach(function(el){{
-    el.addEventListener('toggle',function(){{
-      if(el.open) setTimeout(function(){{resizePlotly(el)}},50);
-      setTimeout(sendH,350);
-    }});
+    el.addEventListener('toggle',function(){{setTimeout(sendH,200)}});
   }});
 }});
-window.addEventListener('load',function(){{setTimeout(sendH,500)}});
 </script>
 </head>
 <body>
