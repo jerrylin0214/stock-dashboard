@@ -294,8 +294,24 @@ def calc_irr(terminal_value: float, transactions=None) -> float | None:
 @st.cache_data(ttl=120)
 def fetch_intraday(ticker: str) -> pd.DataFrame:
     try:
-        raw = yf.download(ticker, period="1d", interval="5m", auto_adjust=True, progress=False)
-        if raw.empty:
+        import pytz
+        from datetime import timedelta
+        et = pytz.timezone("America/New_York")
+        now_et = datetime.now(et)
+        # 往前最多找 7 天，跳過週末與假日（yfinance 回空即代表無交易）
+        for days_back in range(0, 7):
+            target = (now_et - timedelta(days=days_back)).date()
+            if target.weekday() >= 5:   # 週六/日直接跳過
+                continue
+            raw = yf.download(
+                ticker,
+                start=target.isoformat(),
+                end=(target + timedelta(days=1)).isoformat(),
+                interval="5m", auto_adjust=True, progress=False
+            )
+            if not raw.empty:
+                break
+        else:
             return pd.DataFrame()
         if isinstance(raw.columns, pd.MultiIndex):
             raw.columns = raw.columns.get_level_values(0)
