@@ -7,6 +7,7 @@ import os
 import base64
 import requests
 import io
+import json
 import streamlit.components.v1 as components
 
 st.set_page_config(
@@ -115,7 +116,12 @@ HISTORY_FILE = os.path.join(BASE_DIR, "history.csv")
 
 
 def load_portfolio() -> pd.DataFrame:
-    # 雲端：從 Streamlit Secrets 讀取
+    # 優先順序：GitHub settings.json → Streamlit Secrets → 本機 CSV
+    gh = load_settings_gh()
+    if gh and "portfolio" in gh:
+        df = pd.DataFrame(gh["portfolio"])
+        df["ticker"] = df["ticker"].str.upper().str.strip()
+        return df
     if "portfolio" in st.secrets:
         p = st.secrets["portfolio"]
         df = pd.DataFrame({
@@ -130,6 +136,9 @@ def load_portfolio() -> pd.DataFrame:
 
 
 def load_watchlist() -> list[str]:
+    gh = load_settings_gh()
+    if gh and "watchlist" in gh:
+        return [t.strip().upper() for t in gh["watchlist"]]
     if "watchlist" in st.secrets:
         return [t.strip().upper() for t in st.secrets["watchlist"]["tickers"].split(",")]
     with open(WATCHLIST_FILE) as f:
@@ -146,6 +155,9 @@ def save_portfolio(df: pd.DataFrame):
 
 
 def load_cash() -> float:
+    gh = load_settings_gh()
+    if gh and "cash" in gh:
+        return float(gh["cash"])
     if "cash" in st.secrets:
         return float(st.secrets["cash"]["amount"])
     with open(CASH_FILE) as f:
@@ -163,6 +175,46 @@ def _gh_headers():
     token = st.secrets["github"]["token"]
     repo  = st.secrets["github"]["repo"]
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}, repo
+
+
+@st.cache_data(ttl=60)
+def load_settings_gh() -> dict | None:
+    """從 GitHub 讀取 settings.json（portfolio / cash / watchlist）"""
+    headers, repo = _gh_headers()
+    if headers is None:
+        return None
+    url = f"https://api.github.com/repos/{repo}/contents/settings.json"
+    r = requests.get(url, headers=headers)
+    if r.status_code != 200:
+        return None
+    try:
+        return json.loads(base64.b64decode(r.json()["content"]).decode())
+    except Exception:
+        return None
+
+
+def save_settings_gh(port_df: pd.DataFrame, cash_val: float, wl: list[str]) -> bool:
+    """將 portfolio / cash / watchlist 存回 GitHub settings.json"""
+    headers, repo = _gh_headers()
+    if headers is None:
+        return False
+    data = {
+        "portfolio": port_df[["ticker", "shares", "cost"]].to_dict("records"),
+        "cash": cash_val,
+        "watchlist": wl,
+    }
+    content_str = json.dumps(data, ensure_ascii=False, indent=2)
+    url = f"https://api.github.com/repos/{repo}/contents/settings.json"
+    r = requests.get(url, headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+    payload = {
+        "message": f"settings: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+    }
+    if sha:
+        payload["sha"] = sha
+    r2 = requests.put(url, json=payload, headers=headers)
+    return r2.status_code in (200, 201)
 
 
 def load_history() -> pd.DataFrame:
@@ -496,7 +548,7 @@ portfolio_value = sum(
 append_history(portfolio_value, cash)
 
 # ── Tab ──────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["💼 我的持倉", "👀 追蹤清單", "📊 總資產", "💰 配置", "📈 績效"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["💼 我的持倉", "👀 追蹤清單", "📊 總資產", "💰 配置", "📈 績效", "⚙️"])
 
 # ════════════════════════════════════════════════════
 # Tab 1 — 持倉
@@ -1153,3 +1205,82 @@ with tab5:
         '</div>'
     )
     st.markdown(sh_html, unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════
+# Tab 6 — 管理（PIN 保護）
+# ════════════════════════════════════════════════════
+with tab6:
+    _admin_pin = "0000"
+    try:
+        _admin_pin = str(st.secrets["admin"]["pin"])
+    except Exception:
+        pass
+
+    if not st.session_state.get("admin_ok"):
+        st.markdown(
+            '<div style="text-align:center;padding:30px 0 10px;font-size:28px">🔒</div>'
+            '<div style="text-align:center;color:#64748b;font-size:13px;margin-bottom:20px">'
+            '輸入 PIN 碼進入管理頁面</div>',
+            unsafe_allow_html=True,
+        )
+        pin_in = st.text_input("", type="password", placeholder="PIN 碼", label_visibility="collapsed")
+        if st.button("解鎖", use_container_width=True):
+            if pin_in == _admin_pin:
+                st.session_state["admin_ok"] = True
+                st.rerun()
+            else:
+                st.error("PIN 錯誤")
+    else:
+        # ── 已解鎖 ────────────────────────────────
+        c1, c2 = st.columns([4, 1])
+        with c1:
+            st.markdown('<div style="font-size:15px;font-weight:700;color:#e2e8f0">⚙️ 資產管理</div>',
+                        unsafe_allow_html=True)
+        with c2:
+            if st.button("🔒", help="鎖定"):
+                st.session_state["admin_ok"] = False
+                st.rerun()
+
+        # ── 持倉編輯 ──────────────────────────────
+        st.markdown('<div style="font-size:12px;color:#64748b;margin:14px 0 6px">持倉</div>',
+                    unsafe_allow_html=True)
+        _port_edit = portfolio.copy()[["ticker", "shares", "cost"]]
+        edited_port = st.data_editor(
+            _port_edit,
+            column_config={
+                "ticker": st.column_config.TextColumn("代號", width="small"),
+                "shares": st.column_config.NumberColumn("股數", min_value=0, format="%.5g"),
+                "cost":   st.column_config.NumberColumn("成本/股 ($)", min_value=0, format="%.5f"),
+            },
+            num_rows="dynamic",
+            use_container_width=True,
+            key="admin_port",
+        )
+
+        # ── 現金 ──────────────────────────────────
+        st.markdown('<div style="font-size:12px;color:#64748b;margin:14px 0 6px">現金 (USD)</div>',
+                    unsafe_allow_html=True)
+        new_cash_admin = st.number_input(
+            "", value=cash, min_value=0.0, step=100.0, format="%.2f",
+            label_visibility="collapsed", key="admin_cash",
+        )
+
+        # ── 觀察清單 ──────────────────────────────
+        st.markdown('<div style="font-size:12px;color:#64748b;margin:14px 0 6px">觀察清單（逗號分隔）</div>',
+                    unsafe_allow_html=True)
+        new_wl_text = st.text_area(
+            "", value=", ".join(watchlist),
+            label_visibility="collapsed", key="admin_wl", height=80,
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("💾 儲存到 GitHub", use_container_width=True, type="primary"):
+            _new_wl = [t.strip().upper() for t in new_wl_text.split(",") if t.strip()]
+            edited_port["ticker"] = edited_port["ticker"].str.upper().str.strip()
+            ok = save_settings_gh(edited_port, new_cash_admin, _new_wl)
+            if ok:
+                st.success("✅ 儲存成功，重新載入中…")
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("❌ 儲存失敗，請確認 GitHub token 是否設定在 Secrets")
