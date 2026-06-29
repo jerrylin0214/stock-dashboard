@@ -105,6 +105,59 @@ st.markdown("""
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: #0a0e1a; }
     ::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.2); border-radius: 2px; }
+
+    /* ── 主要按鈕（解鎖 / 儲存到 GitHub）加亮加深 ── */
+    [data-testid="stBaseButton-primary"],
+    .stButton button[kind="primary"] {
+        background: linear-gradient(135deg, #00e5ff, #006eff) !important;
+        color: #02101f !important;
+        font-weight: 800 !important;
+        letter-spacing: 1px !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 11px 0 !important;
+        box-shadow: 0 0 16px rgba(0,229,255,0.45),
+                    inset 0 1px 0 rgba(255,255,255,0.35) !important;
+        transition: all 0.18s ease !important;
+    }
+    [data-testid="stBaseButton-primary"]:hover,
+    .stButton button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #4af0ff, #2b86ff) !important;
+        box-shadow: 0 0 26px rgba(0,229,255,0.75),
+                    inset 0 1px 0 rgba(255,255,255,0.5) !important;
+        transform: translateY(-1px) !important;
+    }
+    [data-testid="stBaseButton-primary"]:active,
+    .stButton button[kind="primary"]:active {
+        transform: translateY(0) !important;
+        box-shadow: 0 0 12px rgba(0,229,255,0.4) !important;
+    }
+
+    /* ── 管理頁：頂部標題 ── */
+    .admin-hd {
+        background: linear-gradient(135deg, #07142b, #0a1f3d);
+        border: 1px solid rgba(0,229,255,0.22);
+        border-left: 3px solid #00e5ff;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 6px;
+    }
+    .admin-hd-t { font-size: 16px; font-weight: 800; color: #e2e8f0; letter-spacing: 0.5px; }
+    .admin-hd-s { font-size: 11.5px; color: #64748b; margin-top: 3px; }
+
+    /* ── 管理頁：區塊標題列 ── */
+    .admin-sec {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        margin: 22px 0 8px;
+        padding: 7px 12px;
+        background: linear-gradient(90deg, rgba(0,229,255,0.10), rgba(0,229,255,0));
+        border-left: 3px solid #00e5ff;
+        border-radius: 6px;
+    }
+    .admin-sec .t { font-size: 13.5px; font-weight: 700; color: #e2e8f0; }
+    .admin-sec .d { font-size: 11px; color: #7a8aa0; margin-left: auto; text-align: right; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1224,7 +1277,7 @@ with tab6:
             unsafe_allow_html=True,
         )
         pin_in = st.text_input("", type="password", placeholder="PIN 碼", label_visibility="collapsed")
-        if st.button("解鎖", use_container_width=True):
+        if st.button("解鎖", use_container_width=True, type="primary"):
             if pin_in == _admin_pin:
                 st.session_state["admin_ok"] = True
                 st.rerun()
@@ -1232,18 +1285,24 @@ with tab6:
                 st.error("PIN 錯誤")
     else:
         # ── 已解鎖 ────────────────────────────────
-        c1, c2 = st.columns([4, 1])
+        c1, c2 = st.columns([5, 1])
         with c1:
-            st.markdown('<div style="font-size:15px;font-weight:700;color:#e2e8f0">⚙️ 資產管理</div>',
-                        unsafe_allow_html=True)
+            st.markdown(
+                '<div class="admin-hd">'
+                '<div class="admin-hd-t">⚙️ 資產管理</div>'
+                '<div class="admin-hd-s">編輯持倉、現金與觀察清單，改完務必按最下方「💾 儲存到 GitHub」才會生效</div>'
+                '</div>',
+                unsafe_allow_html=True)
         with c2:
-            if st.button("🔒", help="鎖定"):
+            if st.button("🔒", help="鎖定", use_container_width=True):
                 st.session_state["admin_ok"] = False
                 st.rerun()
 
         # ── 持倉編輯 ──────────────────────────────
-        st.markdown('<div style="font-size:12px;color:#64748b;margin:14px 0 6px">持倉</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="admin-sec"><span class="t">📦 持倉</span>'
+            '<span class="d">點 ＋ 新增一列；改代號／股數／成本／股</span></div>',
+            unsafe_allow_html=True)
         _port_edit = portfolio.copy()[["ticker", "shares", "cost"]]
         edited_port = st.data_editor(
             _port_edit,
@@ -1258,16 +1317,20 @@ with tab6:
         )
 
         # ── 現金 ──────────────────────────────────
-        st.markdown('<div style="font-size:12px;color:#64748b;margin:14px 0 6px">現金 (USD)</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="admin-sec"><span class="t">💵 現金</span>'
+            '<span class="d">帳戶美金餘額，會計入總資產</span></div>',
+            unsafe_allow_html=True)
         new_cash_admin = st.number_input(
             "", value=cash, min_value=0.0, step=100.0, format="%.2f",
             label_visibility="collapsed", key="admin_cash",
         )
 
         # ── 觀察清單 ──────────────────────────────
-        st.markdown('<div style="font-size:12px;color:#64748b;margin:14px 0 6px">觀察清單（逗號分隔）</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="admin-sec"><span class="t">👀 觀察清單</span>'
+            '<span class="d">想追蹤但尚未持有，代號用逗號分隔</span></div>',
+            unsafe_allow_html=True)
         new_wl_text = st.text_area(
             "", value=", ".join(watchlist),
             label_visibility="collapsed", key="admin_wl", height=80,
